@@ -66,3 +66,28 @@ export const dropboxAuth = createTable("dropbox_auth", {
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const googleDriveAuth = createTable("google_drive_auth", {
+  id: varchar("id", { length: 255 })
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  expiresAt: timestamp("expires_at", {
+    mode: "date",
+    withTimezone: true,
+  }).notNull(),
+  createdAt: timestamp("created_at", {
+    mode: "date",
+    withTimezone: true,
+  })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at", {
+    mode: "date",
+    withTimezone: true,
+  })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});

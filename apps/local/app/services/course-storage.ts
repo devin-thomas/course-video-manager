@@ -1,6 +1,7 @@
 import { Config, ConfigError, Effect } from "effect";
 import type { ExportDigest } from "./export-sha256-sidecar";
 import type { DropboxApiError } from "./dropbox-http-client";
+import type { GoogleDriveApiError } from "./google-drive-http-client";
 
 /**
  * Where a Course's Bundles and its Commit receipt live, seen from the Publish.
@@ -34,13 +35,13 @@ export type CopyResult =
 export type CommitReceipt =
   { state: "absent" } | { state: "present"; content: Buffer };
 
-export type RemoteStorageError = DropboxApiError;
+export type RemoteStorageError = DropboxApiError | GoogleDriveApiError;
 
 export const isRemoteStorageError = (e: unknown): e is RemoteStorageError =>
   typeof e === "object" &&
   e !== null &&
   "_tag" in e &&
-  e._tag === "DropboxApiError";
+  (e._tag === "DropboxApiError" || e._tag === "GoogleDriveApiError");
 
 export type CourseStorage = {
   backend: CourseStorageBackend;

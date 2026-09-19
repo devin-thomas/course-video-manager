@@ -788,7 +788,12 @@ export const coursesRelations = relations(courses, ({ many }) => ({
   deliverablesCourses: many(deliverablesCourses),
 }));
 
-export { youtubeAuth, aiHeroAuth, dropboxAuth } from "./schema-auth.js";
+export {
+  youtubeAuth,
+  aiHeroAuth,
+  dropboxAuth,
+  googleDriveAuth,
+} from "./schema-auth.js";
 export { apiTokens } from "./schema-api-token.js";
 
 // Global links table for article writing

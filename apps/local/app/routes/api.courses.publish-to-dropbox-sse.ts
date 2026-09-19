@@ -49,6 +49,15 @@ export const action = async ({ request }: Route.ActionArgs) => {
           });
         },
       },
+      {
+        tag: "GoogleDriveNotAuthenticatedError",
+        handler: (_error, sendEvent) => {
+          sendEvent("error", {
+            message:
+              "Google Drive is not connected. Visit /api/auth/google-drive/initiate to connect it before publishing.",
+          });
+        },
+      },
     ],
     fallbackMessage: "Publish failed unexpectedly",
   });

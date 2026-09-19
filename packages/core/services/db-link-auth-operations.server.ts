@@ -1,5 +1,11 @@
 import { DrizzleService, type Database } from "./drizzle-service.server.js";
-import { links, youtubeAuth, aiHeroAuth, dropboxAuth } from "../db/schema.js";
+import {
+  links,
+  youtubeAuth,
+  aiHeroAuth,
+  dropboxAuth,
+  googleDriveAuth,
+} from "../db/schema.js";
 import { NotFoundError, UnknownDBServiceError } from "./db-service-errors.js";
 import { desc, eq } from "drizzle-orm";
 import { Effect } from "effect";
@@ -234,6 +240,84 @@ export const createLinkAuthOperations = (db: Database) => {
     return { success: true };
   });
 
+  const getGoogleDriveAuth = Effect.fn("getGoogleDriveAuth")(function* () {
+    const auth = yield* makeDbCall(() => db.query.googleDriveAuth.findFirst());
+    return auth ?? null;
+  });
+
+  const upsertGoogleDriveAuth = Effect.fn("upsertGoogleDriveAuth")(
+    function* (tokens: {
+      accessToken: string;
+      refreshToken: string;
+      expiresAt: Date;
+    }) {
+      yield* makeDbCall(() => db.delete(googleDriveAuth));
+
+      const [newAuth] = yield* makeDbCall(() =>
+        db
+          .insert(googleDriveAuth)
+          .values({
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+            expiresAt: tokens.expiresAt,
+          })
+          .returning()
+      );
+
+      if (!newAuth) {
+        return yield* new UnknownDBServiceError({
+          cause: "No Google Drive auth was returned from the database",
+        });
+      }
+
+      return newAuth;
+    }
+  );
+
+  const updateGoogleDriveAccessToken = Effect.fn(
+    "updateGoogleDriveAccessToken"
+  )(function* (tokens: { accessToken: string; expiresAt: Date }) {
+    const existing = yield* makeDbCall(() =>
+      db.query.googleDriveAuth.findFirst()
+    );
+
+    if (!existing) {
+      return yield* new NotFoundError({
+        type: "updateGoogleDriveAccessToken",
+        params: {},
+        message: "No Google Drive auth found to update",
+      });
+    }
+
+    const [updated] = yield* makeDbCall(() =>
+      db
+        .update(googleDriveAuth)
+        .set({
+          accessToken: tokens.accessToken,
+          expiresAt: tokens.expiresAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(googleDriveAuth.id, existing.id))
+        .returning()
+    );
+
+    if (!updated) {
+      return yield* new NotFoundError({
+        type: "updateGoogleDriveAccessToken",
+        params: {},
+      });
+    }
+
+    return updated;
+  });
+
+  const deleteGoogleDriveAuth = Effect.fn("deleteGoogleDriveAuth")(
+    function* () {
+      yield* makeDbCall(() => db.delete(googleDriveAuth));
+      return { success: true };
+    }
+  );
+
   return {
     getLinks,
     createLink,
@@ -249,6 +333,10 @@ export const createLinkAuthOperations = (db: Database) => {
     upsertDropboxAuth,
     updateDropboxAccessToken,
     deleteDropboxAuth,
+    getGoogleDriveAuth,
+    upsertGoogleDriveAuth,
+    updateGoogleDriveAccessToken,
+    deleteGoogleDriveAuth,
   };
 };
 

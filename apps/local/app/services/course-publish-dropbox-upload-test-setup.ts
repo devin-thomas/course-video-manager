@@ -25,6 +25,11 @@ import {
   createFakeDropbox,
   FAKE_ACCESS_TOKEN,
 } from "@/test-utils/fake-dropbox";
+import {
+  createFakeGoogleDrive,
+  FAKE_COURSES_FOLDER_ID,
+  FAKE_DRIVE_ACCESS_TOKEN,
+} from "@/test-utils/fake-google-drive";
 import { CourseOperationsService } from "@/services/db-course-operations.server";
 import { VideoOperationsService } from "@/services/db-video-operations.server";
 import { VersionOperationsService } from "@/services/db-version-operations.server";
@@ -42,6 +47,7 @@ import {
   clips as clipsTable,
   videos as videosTable,
   dropboxAuth,
+  googleDriveAuth,
 } from "@/db/schema";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
@@ -49,6 +55,7 @@ import { eq } from "drizzle-orm";
 let testDb: TestDb;
 let finishedVideosDir: string;
 export let fakeDropbox: ReturnType<typeof createFakeDropbox>;
+export let fakeDrive: ReturnType<typeof createFakeGoogleDrive>;
 
 /** Register the lifecycle every file that uses this setup needs. */
 export function setupDropboxUploadTests() {
@@ -59,6 +66,7 @@ export function setupDropboxUploadTests() {
 
   afterEach(() => {
     fakeDropbox?.cleanup();
+    fakeDrive?.cleanup();
   });
 }
 
@@ -85,22 +93,40 @@ export const isVideoUploadRequest = (url: string, init: RequestInit) => {
 export const setupUploads = async (opts?: {
   videoCount?: number;
   config?: Record<string, string>;
+  backend?: "dropbox" | "google-drive";
 }) => {
   const videoCount = opts?.videoCount ?? 6;
+  const backend = opts?.backend ?? "dropbox";
   await truncateAllTables(testDb);
-
-  fakeDropbox = createFakeDropbox();
-  fakeDropbox.install();
 
   finishedVideosDir = fs.mkdtempSync(
     path.join(tmpdir(), "upload-test-videos-")
   );
 
-  await testDb.insert(dropboxAuth).values({
-    accessToken: FAKE_ACCESS_TOKEN,
-    refreshToken: "fake-refresh-token",
-    expiresAt: new Date(Date.now() + 3600 * 1000),
-  });
+  if (backend === "google-drive") {
+    fakeDrive = createFakeGoogleDrive();
+    fakeDrive.install();
+    await testDb.insert(googleDriveAuth).values({
+      accessToken: FAKE_DRIVE_ACCESS_TOKEN,
+      refreshToken: "fake-refresh-token",
+      expiresAt: new Date(Date.now() + 3600 * 1000),
+    });
+  } else {
+    fakeDropbox = createFakeDropbox();
+    fakeDropbox.install();
+    await testDb.insert(dropboxAuth).values({
+      accessToken: FAKE_ACCESS_TOKEN,
+      refreshToken: "fake-refresh-token",
+      expiresAt: new Date(Date.now() + 3600 * 1000),
+    });
+  }
+  const backendConfig: Array<[string, string]> =
+    backend === "google-drive"
+      ? [
+          ["COURSE_STORAGE_BACKEND", "google-drive"],
+          ["GOOGLE_DRIVE_COURSES_FOLDER_ID", FAKE_COURSES_FOLDER_ID],
+        ]
+      : [["DROPBOX_REMOTE_PATH", DROPBOX_REMOTE_PATH]];
 
   const drizzleLayer = Layer.succeed(DrizzleService, testDb as any);
   const dbLayer = Layer.mergeAll(
@@ -229,7 +255,7 @@ export const setupUploads = async (opts?: {
     ConfigProvider.fromMap(
       new Map([
         ["FINISHED_VIDEOS_DIRECTORY", finishedVideosDir],
-        ["DROPBOX_REMOTE_PATH", DROPBOX_REMOTE_PATH],
+        ...backendConfig,
         ...Object.entries(opts?.config ?? {}),
       ])
     )
