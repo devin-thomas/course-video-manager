@@ -439,3 +439,24 @@ export const uploadFileFromDisk = Effect.fn("googleDriveUploadFileFromDisk")(
     );
   }
 );
+
+/** Move a file to Drive's trash — recoverable for 30 days, never a hard delete. */
+export const trashFile = Effect.fn("googleDriveTrashFile")(function* (opts: {
+  accessToken: string;
+  fileId: string;
+}) {
+  const url = new URL(`${DRIVE_API}/files/${opts.fileId}`);
+  url.searchParams.set("supportsAllDrives", "true");
+  yield* driveFetch(
+    url.toString(),
+    {
+      method: "PATCH",
+      headers: {
+        ...authHeaders(opts.accessToken),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ trashed: true }),
+    },
+    "files.update(trash)"
+  );
+});

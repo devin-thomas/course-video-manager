@@ -1,10 +1,18 @@
 import { Effect, Config } from "effect";
 import { FileSystem } from "@effect/platform";
 import { VideoPostOperationsService } from "@/services/db-video-post-operations.server";
-import { BufferApiService } from "@/services/buffer-api-service.server";
-import { ObjectStoreService } from "@/services/object-store-service.server";
+import { SocialStagingService } from "@/services/social-staging-service.server";
+import { MakeWebhookService } from "@/services/make-webhook-service.server";
 import type { SendEvent } from "@/lib/create-sse-response.server";
 
+/**
+ * Post an exported vertical video to Buffer, by way of Make.
+ *
+ * CVM stages the file in the Google Drive social-staging folder and sends the
+ * caption plus the file's Drive ID to the "CVM → Buffer" Make scenario, which
+ * shares the file and queues it in Buffer. "Posted" means "handed to Make":
+ * Buffer fetches the video asynchronously and there is no delivery receipt.
+ */
 export const bufferPostProgram = (opts: {
   videoId: string;
   caption: string;
@@ -12,11 +20,10 @@ export const bufferPostProgram = (opts: {
 }) =>
   Effect.gen(function* () {
     const finishedDir = yield* Config.string("FINISHED_VIDEOS_DIRECTORY");
-    const channelId = yield* Config.string("BUFFER_CHANNEL_ID");
     const fs = yield* FileSystem.FileSystem;
     const videoPostOps = yield* VideoPostOperationsService;
-    const bufferApi = yield* BufferApiService;
-    const objectStore = yield* ObjectStoreService;
+    const staging = yield* SocialStagingService;
+    const make = yield* MakeWebhookService;
 
     const filePath = `${finishedDir}/${opts.videoId}.mp4`;
     const exists = yield* fs.exists(filePath);
@@ -34,10 +41,10 @@ export const bufferPostProgram = (opts: {
 
     opts.sendEvent("uploading-blob", { percentage: 0 });
 
-    const objectKey = `cvm/buffer-posts/${opts.videoId}.mp4`;
-    const uploaded = yield* objectStore.upload({
-      pathname: objectKey,
+    const fileName = `${opts.videoId}.mp4`;
+    const staged = yield* staging.stage({
       filePath,
+      fileName,
       onProgress: (percentage) => {
         opts.sendEvent("uploading-blob", { percentage });
       },
@@ -45,22 +52,21 @@ export const bufferPostProgram = (opts: {
 
     opts.sendEvent("creating-post", {});
 
-    const bufferPost = yield* bufferApi.createPost({
-      channelId,
-      text: opts.caption,
-      videoUrl: uploaded.url,
+    const { bufferPostId } = yield* make.sendSocialPost({
+      caption: opts.caption,
+      googleDriveFileId: staged.fileId,
+      videoId: opts.videoId,
+      fileName,
     });
 
-    yield* videoPostOps.updateRemoteInfo({
-      id: post.id,
-      remoteId: bufferPost.id,
-      remoteUrl: null,
-    });
+    if (bufferPostId) {
+      yield* videoPostOps.updateRemoteInfo({
+        id: post.id,
+        remoteId: bufferPostId,
+        remoteUrl: null,
+      });
+    }
 
-    // "Posted" now means "submitted to Buffer" — Buffer downloads the freshly
-    // uploaded object asynchronously. The object is cleaned up by an S3
-    // lifecycle rule (1-day expiry on cvm/buffer-posts/), not by app code, so
-    // we mark the post as posted immediately and do not delete anything here.
     yield* videoPostOps.markPosted(post.id);
 
     opts.sendEvent("complete", {});

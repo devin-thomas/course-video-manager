@@ -47,6 +47,7 @@ export const createFakeGoogleDrive = () => {
   >();
   const calls: Array<{ method: string; url: URL }> = [];
   let counter = 0;
+  const baseTime = Date.now();
   const nextId = (prefix: string) => `${prefix}-${++counter}`;
 
   const failures: Array<{
@@ -90,6 +91,7 @@ export const createFakeGoogleDrive = () => {
     mimeType: string;
     parentId: string;
     content?: Buffer;
+    createdAt?: number;
   }) => {
     const item: StoredItem = {
       id: nextId(opts.mimeType === FOLDER ? "folder" : "file"),
@@ -97,7 +99,7 @@ export const createFakeGoogleDrive = () => {
       mimeType: opts.mimeType,
       parentId: opts.parentId,
       content: opts.content ?? Buffer.alloc(0),
-      createdAt: ++counter,
+      createdAt: opts.createdAt ?? baseTime + ++counter,
       trashed: false,
       revisions: 1,
     };
@@ -118,6 +120,11 @@ export const createFakeGoogleDrive = () => {
       }
       if (clause === "trashed = false") {
         if (item.trashed) return false;
+        continue;
+      }
+      const created = clause.match(/^createdTime < '([^']+)'$/);
+      if (created) {
+        if (!(item.createdAt < Date.parse(created[1]!))) return false;
         continue;
       }
       const cmp = clause.match(/^(name|mimeType) (=|!=) ('(?:[^'\\]|\\.)*')$/);
@@ -294,6 +301,15 @@ export const createFakeGoogleDrive = () => {
       return json(200, describe(item));
     }
 
+    const patch = path.match(/^\/drive\/v3\/files\/([^/]+)$/);
+    if (patch && method === "PATCH") {
+      const item = items.get(patch[1]!);
+      if (!item) return json(404, { error: { message: "File not found" } });
+      const body = JSON.parse(bodyBuffer(init).toString("utf-8"));
+      if (body.trashed === true) item.trashed = true;
+      return json(200, describe(item));
+    }
+
     const get = path.match(/^\/drive\/v3\/files\/([^/]+)$/);
     if (get && method === "GET") {
       const item = items.get(get[1]!);
@@ -338,8 +354,37 @@ export const createFakeGoogleDrive = () => {
         ({ path: p, item }) => p === path && item.mimeType === FOLDER
       ).length,
     /** Put a file straight into the fake, as an earlier attempt would have. */
-    seedFile: (parentId: string, name: string, content: Buffer) =>
-      store({ name, mimeType: "video/mp4", parentId, content }),
+    seedFile: (
+      parentId: string,
+      name: string,
+      content: Buffer,
+      createdAt?: Date
+    ) =>
+      store({
+        name,
+        mimeType: "video/mp4",
+        parentId,
+        content,
+        createdAt: createdAt?.getTime(),
+      }),
+    /** Every non-trashed file directly inside a folder, by name. */
+    namesIn: (parentId: string) =>
+      Array.from(items.values())
+        .filter((item) => item.parentId === parentId && !item.trashed)
+        .map((item) => item.name)
+        .sort(),
+    /** Add a folder the way the author would, outside the courses root. */
+    addFolder: (id: string) =>
+      items.set(id, {
+        id,
+        name: id,
+        mimeType: FOLDER,
+        parentId: "root",
+        content: Buffer.alloc(0),
+        createdAt: 0,
+        trashed: false,
+        revisions: 1,
+      }),
     trash: (id: string) => {
       const item = items.get(id);
       if (item) item.trashed = true;

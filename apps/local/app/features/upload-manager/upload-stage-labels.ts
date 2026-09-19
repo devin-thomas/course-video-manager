@@ -1,8 +1,8 @@
 import type { uploadReducer } from "./upload-reducer";
 
 const BUFFER_STAGE_LABELS: Record<uploadReducer.BufferStage, string> = {
-  "uploading-blob": "Uploading to cloud",
-  "creating-post": "Creating Buffer post",
+  "uploading-blob": "Staging in Google Drive",
+  "creating-post": "Sending to Make",
   polling: "Waiting for delivery",
   "cleaning-up": "Cleaning up",
 };

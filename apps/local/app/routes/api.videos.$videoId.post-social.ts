@@ -17,15 +17,24 @@ export const action = async (args: Route.ActionArgs) => {
     program: (sendEvent) => bufferPostProgram({ videoId, caption, sendEvent }),
     errorHandlers: [
       {
-        tag: "BufferApiError",
+        tag: "MakeWebhookError",
         handler: (e, sendEvent) => {
           sendEvent("error", { message: e.message });
         },
       },
       {
-        tag: "ObjectStoreError",
+        tag: "GoogleDriveApiError",
         handler: (e, sendEvent) => {
           sendEvent("error", { message: e.message });
+        },
+      },
+      {
+        tag: "GoogleDriveNotAuthenticatedError",
+        handler: (_e, sendEvent) => {
+          sendEvent("error", {
+            message:
+              "Google Drive is not connected. Visit /api/auth/google-drive/initiate to connect it.",
+          });
         },
       },
     ],

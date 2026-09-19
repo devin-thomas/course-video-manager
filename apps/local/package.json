@@ -30,7 +30,6 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.0",
     "@ai-sdk/react": "^3.0.0",
-    "@aws-sdk/client-s3": "^3.716.0",
     "@cvm/core": "workspace:*",
     "@cvm/lucide-icons": "workspace:*",
     "@cvm/overlay-renderer": "workspace:*",
