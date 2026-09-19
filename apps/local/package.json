@@ -25,7 +25,7 @@
     "db:verify-features": "tsx scripts/verify-schema-features.ts",
     "db:backfill-search-text": "tsx scripts/backfill-search-text.ts",
     "gen:lucide-icons": "tsx scripts/generate-lucide-icons.ts",
-    "db:clone-local": "./scripts/clone-db-to-local.sh"
+    "db:clone-local": "bash ./scripts/clone-db-to-local.sh"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.0",
