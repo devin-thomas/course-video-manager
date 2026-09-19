@@ -16,18 +16,11 @@ import { VersionOperationsService } from "@/services/db-version-operations.serve
 import { ExportError, PublishValidationError } from "./course-publish-errors";
 import type { EmitPublishDetailEvent } from "./course-publish-export-events";
 import {
-  uploadFile,
-  getMetadata,
-  listFolder,
-  copyBatch,
-  type DropboxFileMetadata,
-} from "./dropbox-http-client";
-import {
   planBundleReuse,
   type ReusableSource,
 } from "./course-publish-reuse-plan";
-import { getValidDropboxAccessToken } from "./dropbox-auth-service";
-import { uploadConcurrency } from "./dropbox-upload-config";
+import { openCourseStorage } from "./course-storage-resolver";
+import { isRemoteStorageError, type RemoteFile } from "./course-storage";
 import { createShipVideo, type VideoEntry } from "./course-publish-ship-video";
 import { ensureExportDigest } from "./export-sha256-sidecar";
 
@@ -39,14 +32,8 @@ import { ensureExportDigest } from "./export-sha256-sidecar";
 export const noExportPhase = (): Effect.Effect<void, ExportError> =>
   Effect.void;
 
-/** Where a Course's Bundles live. */
-const resolveDropboxCourseDir = (courseName: string) =>
-  Config.string("DROPBOX_REMOTE_PATH").pipe(
-    Effect.map((remotePath) => `${remotePath}/${courseName}`)
-  );
-
-export const syncFrozenCourseVersionToDropbox = Effect.fn(
-  "syncFrozenCourseVersionToDropbox"
+export const syncFrozenCourseVersionToRemote = Effect.fn(
+  "syncFrozenCourseVersionToRemote"
 )(function* (input: {
   courseId: string;
   courseVersionId: string;
@@ -74,7 +61,6 @@ export const syncFrozenCourseVersionToDropbox = Effect.fn(
   const finishedVideosDirectory = yield* Config.string(
     "FINISHED_VIDEOS_DIRECTORY"
   );
-  const accessToken = yield* getValidDropboxAccessToken;
 
   const targetVersion = yield* versionOps.getCourseVersionById(
     input.courseVersionId
@@ -98,9 +84,7 @@ export const syncFrozenCourseVersionToDropbox = Effect.fn(
     input.includeTodoLessons
   );
 
-  const dropboxCourseDir = yield* resolveDropboxCourseDir(
-    repoWithSections.name
-  );
+  const storage = yield* openCourseStorage(repoWithSections.name);
 
   // The Export Hash is the recipe an Exported Video is addressed by — Clip
   // filenames, source timings, order, Video Format and the Export Version Key —
@@ -163,49 +147,35 @@ export const syncFrozenCourseVersionToDropbox = Effect.fn(
     .digest("hex")
     .slice(0, 16);
   const assetBasePath = `versions/${versionFingerprint}-${assetFingerprint}`;
-  const remoteBundleDir = `${dropboxCourseDir}/${assetBasePath}`;
 
   // Take stock of whatever of this bundle already landed. A bundle left
   // half-written by an interrupted Publish is resumed, not rejected: the
-  // listing already says precisely which files are absent.
-  const remoteFilesByPath = new Map<string, DropboxFileMetadata>();
-  const existingBundle = yield* getMetadata({
-    accessToken,
-    path: remoteBundleDir,
-  }).pipe(Effect.catchTag("DropboxApiError", () => Effect.succeed(null)));
-
-  if (existingBundle && existingBundle[".tag"] === "folder") {
-    const remoteEntries = yield* listFolder({
-      accessToken,
-      path: remoteBundleDir,
-      recursive: true,
-    });
-    for (const entry of remoteEntries) {
-      if (entry[".tag"] === "file") {
-        remoteFilesByPath.set(entry.path_display.toLowerCase(), entry);
-      }
-    }
+  // listing already says precisely which files are absent. Keyed by the
+  // lowercased course-relative path.
+  const remoteFilesByPath = new Map<string, RemoteFile>();
+  for (const file of yield* storage.listFiles(assetBasePath)) {
+    remoteFilesByPath.set(file.key, file);
   }
 
   const remoteVideoPath = (entry: VideoEntry) =>
-    `${remoteBundleDir}/${entry.relativeAssetPath}`;
+    `${assetBasePath}/${entry.relativeAssetPath}`;
 
   // ── The reuse plan ────────────────────────────────────────────────────────
   // What the previously Published Bundle can hand this one for free. Videos
-  // matched here are copied inside Dropbox rather than sent from this machine
-  // — matched by BYTE HASH, so a re-export is never mistaken for the file it
-  // replaces. Drawn here and consulted per Video, because a Video's
+  // matched here are copied inside the backend rather than sent from this
+  // machine — matched by BYTE HASH, so a re-export is never mistaken for the
+  // file it replaces. Drawn here and consulted per Video, because a Video's
   // copyability is knowable only once its own export has landed.
-  const reusePlan = yield* planBundleReuse({ accessToken, dropboxCourseDir });
+  const reusePlan = yield* planBundleReuse({ storage });
 
   /**
    * The previous manifest's numbers for a file already sitting at this
-   * Publish's address, found by the Byte Hash Dropbox reports for it. Only
+   * Publish's address, found by the Byte Hash the backend reports for it. Only
    * reached where this machine holds no export to digest — see
    * `adoptFromPlan`.
    */
-  const plannedSourceOf = (remoteFile: DropboxFileMetadata) =>
-    reusePlan.get(remoteFile.content_hash);
+  const plannedSourceOf = (remoteFile: RemoteFile) =>
+    reusePlan.get(remoteFile.byteHash);
 
   /**
    * Which Videos Dropbox can produce from its own storage, and the numbers the
@@ -239,7 +209,7 @@ export const syncFrozenCourseVersionToDropbox = Effect.fn(
     // at the same Export Hash, and so is not copyable.
     const local = yield* ensureExportDigest(effectFs, entry.localPath, null);
     if (!local) return false;
-    const source = reusePlan.get(local.contentHash);
+    const source = reusePlan.get(storage.byteHashOf(local));
     if (!source) return false;
     reusableByVideoId.set(entry.videoId, {
       entry,
@@ -303,7 +273,7 @@ export const syncFrozenCourseVersionToDropbox = Effect.fn(
     input.onDetailEvent?.({ event: "progress", data: { percentage } });
   };
 
-  const uploadConcurrencyLimit = yield* uploadConcurrency;
+  const uploadConcurrencyLimit = storage.uploadConcurrency;
 
   // Videos whose file never appeared. Under pipelining this is only knowable
   // per Video, after its handoff — so other Videos may already have shipped by
@@ -323,7 +293,7 @@ export const syncFrozenCourseVersionToDropbox = Effect.fn(
   // Video rather than to the Publish as a whole.
   const shipVideo = createShipVideo({
     effectFs,
-    accessToken,
+    storage,
     onDetailEvent: input.onDetailEvent,
     remoteFilesByPath,
     remoteVideoPath,
@@ -339,12 +309,10 @@ export const syncFrozenCourseVersionToDropbox = Effect.fn(
   const copyReceipts = new Map<string, { sha256: string; bytes: number }>();
 
   /**
-   * Ask Dropbox to duplicate every reusable Video inside its own storage.
+   * Ask the backend to duplicate every reusable Video inside its own storage.
    *
-   * One batch call for the whole bundle, issued beside the upload pool. The
-   * route is asynchronous even for a single entry, so the wait is
-   * unconditional — but it is a wait on Dropbox's own block copy, not on 25 GB
-   * leaving this machine.
+   * One call for the whole bundle, issued beside the upload pool — a wait on
+   * the backend's own copy, not on 25 GB leaving this machine.
    *
    * Returns the Videos that must be uploaded after all. A source that vanished
    * between the plan and the copy is ordinary and falls back quietly; a copy
@@ -359,17 +327,18 @@ export const syncFrozenCourseVersionToDropbox = Effect.fn(
     const shipments = Array.from(reusableByVideoId.values());
     if (shipments.length === 0) return [] as VideoEntry[];
 
-    const results = yield* copyBatch({
-      accessToken,
-      entries: shipments.map((shipment) => ({
-        fromPath: shipment.source.fromPath,
-        toPath: remoteVideoPath(shipment.entry),
-      })),
-    }).pipe(
-      // A batch that could not be launched or polled at all leaves every Video
-      // in it to the upload pool. Nothing is lost but the saving.
-      Effect.catchTag("DropboxApiError", () => Effect.succeed(null))
-    );
+    const results = yield* storage
+      .copyFiles(
+        shipments.map((shipment) => ({
+          from: shipment.source.from,
+          toRelativePath: remoteVideoPath(shipment.entry),
+        }))
+      )
+      .pipe(
+        // A batch that could not be launched or polled at all leaves every
+        // Video in it to the upload pool. Nothing is lost but the saving.
+        Effect.catchIf(isRemoteStorageError, () => Effect.succeed(null))
+      );
     // A Video the batch would not take must move real bytes after all. It is
     // refused HERE rather than after the batch returns, because a Video still
     // queued for an upload slot reads this on its own turn and must never be
@@ -387,7 +356,7 @@ export const syncFrozenCourseVersionToDropbox = Effect.fn(
         fallbacks.push(refuse(shipment.entry));
         continue;
       }
-      if (result.metadata.content_hash !== shipment.source.contentHash) {
+      if (result.file.byteHash !== shipment.source.byteHash) {
         return yield* new ExportError({
           message: `Copy verification failed for video ${shipment.entry.videoId}: content_hash mismatch`,
         });
@@ -515,32 +484,24 @@ export const syncFrozenCourseVersionToDropbox = Effect.fn(
 
   // Schema and manifest are content-identical for a given bundle path, so
   // whichever of them a previous attempt landed is left alone.
-  const schemaRemotePath = `${remoteBundleDir}/course.schema.json`;
-  const manifestRemotePath = `${remoteBundleDir}/manifest.json`;
+  const schemaRemotePath = `${assetBasePath}/course.schema.json`;
+  const manifestRemotePath = `${assetBasePath}/manifest.json`;
   if (!remoteFilesByPath.has(schemaRemotePath.toLowerCase())) {
-    yield* uploadFile({
-      accessToken,
-      path: schemaRemotePath,
-      content: Buffer.from(schemaJson, "utf-8"),
-    });
+    yield* storage.writeNewFile(
+      schemaRemotePath,
+      Buffer.from(schemaJson, "utf-8")
+    );
   }
   if (!remoteFilesByPath.has(manifestRemotePath.toLowerCase())) {
-    yield* uploadFile({
-      accessToken,
-      path: manifestRemotePath,
-      content: Buffer.from(manifestJson, "utf-8"),
-    });
+    yield* storage.writeNewFile(
+      manifestRemotePath,
+      Buffer.from(manifestJson, "utf-8")
+    );
   }
 
-  // Write the root course.json receipt with overwrite mode — the sole
-  // commit marker. This is the last write; consumers read it to know
-  // which bundle is current.
-  yield* uploadFile({
-    accessToken,
-    path: `${dropboxCourseDir}/course.json`,
-    content: Buffer.from(manifestJson, "utf-8"),
-    mode: "overwrite",
-  });
+  // Replace the root course.json receipt — the sole commit marker. This is
+  // the last write; consumers read it to know which bundle is current.
+  yield* storage.commitReceipt(Buffer.from(manifestJson, "utf-8"));
 
   input.onDetailEvent?.({ event: "progress", data: { percentage: 100 } });
 

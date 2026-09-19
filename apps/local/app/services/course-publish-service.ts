@@ -25,8 +25,8 @@ import {
 } from "./course-publish-errors";
 import {
   noExportPhase,
-  syncFrozenCourseVersionToDropbox,
-} from "./course-publish-dropbox";
+  syncFrozenCourseVersionToRemote,
+} from "./course-publish-sync";
 import {
   runObservedExportLoop,
   type EmitPublishDetailEvent,
@@ -242,7 +242,7 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
               unfrozenCourseVersionId: latestVersion.id,
             });
           }
-          return yield* syncFrozenCourseVersionToDropbox({
+          return yield* syncFrozenCourseVersionToRemote({
             courseId,
             courseVersionId: latestPublishedVersion.id,
             includeTodoLessons,
@@ -412,7 +412,7 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
         // content-addressed and idempotent, so a later re-publish re-uploads
         // nothing that already landed.
         const commitPhase = Effect.exit(
-          syncFrozenCourseVersionToDropbox({
+          syncFrozenCourseVersionToRemote({
             courseId,
             courseVersionId: latestVersion.id,
             includeTodoLessons,
@@ -489,7 +489,7 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
         onProgress?: DropboxSyncProgressCallback
       ) {
         return yield* courseVersionMutationSemaphore.withPermits(1)(
-          syncFrozenCourseVersionToDropbox({
+          syncFrozenCourseVersionToRemote({
             courseId,
             courseVersionId,
             includeTodoLessons,

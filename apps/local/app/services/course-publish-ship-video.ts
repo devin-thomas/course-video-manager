@@ -6,12 +6,9 @@ import {
   extractErrorMessage,
   type EmitPublishDetailEvent,
 } from "./course-publish-export-events";
-import {
-  uploadFileFromDisk,
-  type DropboxFileMetadata,
-} from "./dropbox-http-client";
 import type { ReusableSource } from "./course-publish-reuse-plan";
 import { DropboxContentHasher } from "./dropbox-content-hash";
+import type { CourseStorage, RemoteFile } from "./course-storage";
 import { readExportDigest, writeExportDigest } from "./export-sha256-sidecar";
 
 /**
@@ -59,7 +56,7 @@ const hashFileLocally = Effect.fn("hashFileLocally")(function* (
 
 /**
  * Everything one Video's trip through `shipVideo` needs from the enclosing
- * `syncFrozenCourseVersionToDropbox` — split out here purely to keep that
+ * `syncFrozenCourseVersionToRemote` — split out here purely to keep that
  * module under the repo's file-token budget. This is a factory rather than a
  * bag of free functions because every one of these callbacks closes over
  * mutable state (`videoByteSizes`, `uploadedByVideo`, `missingVideos`) that
@@ -67,17 +64,15 @@ const hashFileLocally = Effect.fn("hashFileLocally")(function* (
  */
 export function createShipVideo(deps: {
   effectFs: FileSystem.FileSystem;
-  accessToken: string;
+  storage: CourseStorage;
   onDetailEvent?: EmitPublishDetailEvent;
-  remoteFilesByPath: Map<string, DropboxFileMetadata>;
+  remoteFilesByPath: Map<string, RemoteFile>;
   remoteVideoPath: (entry: VideoEntry) => string;
   /**
    * The previous Bundle's numbers for a landed file, found by the Byte Hash
-   * Dropbox reports for it. See `adoptFromPlan`.
+   * the backend reports for it. See `adoptFromPlan`.
    */
-  plannedSourceOf: (
-    remoteFile: DropboxFileMetadata
-  ) => ReusableSource | undefined;
+  plannedSourceOf: (remoteFile: RemoteFile) => ReusableSource | undefined;
   /**
    * Offer a Video with its export on disk to the copy batch, and answer
    * whether the batch took it. A Video it took sends nothing from here: the
@@ -97,7 +92,7 @@ export function createShipVideo(deps: {
 }) {
   const {
     effectFs,
-    accessToken,
+    storage,
     onDetailEvent,
     remoteFilesByPath,
     remoteVideoPath,
@@ -156,7 +151,7 @@ export function createShipVideo(deps: {
    */
   const adoptLandedVideo = Effect.fn("adoptLandedVideo")(function* (
     entry: VideoEntry,
-    remoteFile: DropboxFileMetadata,
+    remoteFile: RemoteFile,
     fileSize: number
   ) {
     const cached = yield* readExportDigest(effectFs, entry.localPath, fileSize);
@@ -166,8 +161,8 @@ export function createShipVideo(deps: {
       yield* writeExportDigest(effectFs, entry.localPath, hashes);
     }
     if (
-      remoteFile.content_hash !== hashes.contentHash ||
-      remoteFile.size !== hashes.bytes
+      remoteFile.byteHash !== storage.byteHashOf(hashes) ||
+      remoteFile.bytes !== hashes.bytes
     ) {
       return yield* new ExportError({
         message: `Immutable asset bundle conflict for video ${entry.videoId}`,
@@ -184,17 +179,18 @@ export function createShipVideo(deps: {
    * Send the Video's bytes, digesting them off the same pass — the manifest's
    * proven-source-revision guarantee is met without a separate read.
    */
-  const streamVideo = Effect.fn("streamVideoToDropbox")(function* (
+  const streamVideo = Effect.fn("streamVideoToRemote")(function* (
     entry: VideoEntry,
     fileSize: number
   ) {
     const sha256Hash = createHash("sha256");
+    // Both digests are always taken, whatever the backend, so the sidecar a
+    // Publish banks stays valid if the backend is ever switched.
     const contentHasher = new DropboxContentHasher();
     let streamedBytes = 0;
 
-    const metadata = yield* uploadFileFromDisk({
-      accessToken,
-      path: remoteVideoPath(entry),
+    const uploaded = yield* storage.uploadFromDisk({
+      relativePath: remoteVideoPath(entry),
       filePath: entry.localPath,
       fileSize,
       onChunk: (chunk) => {
@@ -217,7 +213,8 @@ export function createShipVideo(deps: {
     });
 
     const contentHash = contentHasher.digest();
-    if (metadata.content_hash !== contentHash) {
+    const sha256 = sha256Hash.digest("hex");
+    if (uploaded.byteHash !== storage.byteHashOf({ sha256, contentHash })) {
       return yield* new ExportError({
         message: `Upload verification failed for video ${entry.videoId}: content_hash mismatch`,
       });
@@ -231,7 +228,7 @@ export function createShipVideo(deps: {
       fileSize
     );
     const digest = {
-      sha256: sha256Hash.digest("hex"),
+      sha256,
       contentHash,
       bytes: streamedBytes,
       durationInSeconds: measured?.durationInSeconds ?? null,

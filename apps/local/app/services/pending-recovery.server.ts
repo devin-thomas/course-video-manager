@@ -1,7 +1,7 @@
-import { Config, Effect } from "effect";
+import { Effect } from "effect";
 import { VersionOperationsService } from "@/services/db-version-operations.server";
-import { download } from "./dropbox-http-client";
-import { getValidDropboxAccessToken } from "./dropbox-auth-service";
+import { openCourseStorage } from "./course-storage-resolver";
+import { isRemoteStorageError } from "./course-storage";
 
 export type PendingRecovery = {
   versionId: string;
@@ -15,16 +15,13 @@ export const classifyPendingRecovery = Effect.fn("classifyPendingRecovery")(
     const pending = yield* versionOps.getPendingVersion(input.courseId);
     if (!pending) return null;
 
-    const dropboxRemotePath = yield* Config.string("DROPBOX_REMOTE_PATH");
-    const courseJsonPath = `${dropboxRemotePath}/${input.courseName}/course.json`;
-
-    // Attempt to get a valid access token. If Dropbox is not authenticated,
-    // refuse to classify — same as "mount unreachable" in the old FS world.
-    const accessToken = yield* getValidDropboxAccessToken.pipe(
-      Effect.catchAll(() => Effect.succeed(null as string | null))
+    // If the backend cannot be reached or is not authenticated, refuse to
+    // classify — same as "mount unreachable" in the old FS world.
+    const storage = yield* openCourseStorage(input.courseName).pipe(
+      Effect.catchAll(() => Effect.succeed(null))
     );
 
-    if (!accessToken) {
+    if (!storage) {
       return {
         versionId: pending.id,
         versionName: pending.name,
@@ -32,26 +29,24 @@ export const classifyPendingRecovery = Effect.fn("classifyPendingRecovery")(
       } satisfies PendingRecovery;
     }
 
-    const receiptState: PendingRecovery["receiptState"] = yield* download({
-      accessToken,
-      path: courseJsonPath,
-    }).pipe(
-      Effect.map((buffer): PendingRecovery["receiptState"] => {
-        try {
-          const doc = JSON.parse(buffer.toString("utf-8")) as {
-            courseVersionId?: unknown;
-          };
-          return doc.courseVersionId === pending.id ? "committed" : "absent";
-        } catch {
-          return "unreadable";
-        }
-      }),
-      Effect.catchTag("DropboxApiError", (error) =>
-        Effect.succeed<PendingRecovery["receiptState"]>(
-          error.status === 409 ? "absent" : "unreadable"
+    const receiptState: PendingRecovery["receiptState"] = yield* storage
+      .readCommitReceipt()
+      .pipe(
+        Effect.map((receipt): PendingRecovery["receiptState"] => {
+          if (receipt.state === "absent") return "absent";
+          try {
+            const doc = JSON.parse(receipt.content.toString("utf-8")) as {
+              courseVersionId?: unknown;
+            };
+            return doc.courseVersionId === pending.id ? "committed" : "absent";
+          } catch {
+            return "unreadable";
+          }
+        }),
+        Effect.catchIf(isRemoteStorageError, () =>
+          Effect.succeed<PendingRecovery["receiptState"]>("unreadable")
         )
-      )
-    );
+      );
 
     return {
       versionId: pending.id,
