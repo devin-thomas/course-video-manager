@@ -77,23 +77,17 @@ This registers the `0000` baseline migration as already-applied so the next `pnp
 | `pnpm db:baseline` | Mark the `0000` baseline as applied (one-time setup)          |
 | `pnpm db:studio`   | Open Drizzle Studio                                           |
 
-## Social posts: Google Drive → Make → Buffer
+## Not in this fork: YouTube and Buffer posting
 
-"Post to Buffer" hands a Short to Buffer by way of a Make scenario. Nothing here uses AWS or a Buffer SDK:
+Upstream uploads finished videos to YouTube and posts vertical Shorts to
+Buffer (by way of S3, and a Make or Zapier scenario). Both integrations are
+removed here: this fork publishes Course bundles to Google Drive and nothing
+else, so it needs no YouTube or Buffer API credentials.
 
-1. CVM uploads the exported vertical video to the Google Drive folder `GOOGLE_DRIVE_SOCIAL_STAGING_FOLDER_ID`. It uses the same Drive connection as publishing (`/api/auth/google-drive/initiate`). Staged files older than 7 days are moved to the Drive trash on the next post.
-2. CVM POSTs `{caption, captionJson, googleDriveFileId, videoId, fileName}` to `MAKE_SOCIAL_WEBHOOK_URL`. `captionJson` is the caption already JSON-encoded.
-3. The **CVM → Buffer (social post)** Make scenario runs four modules:
-   - **Webhooks › Custom webhook** receives the call.
-   - **Google Drive › Get a Share Link** makes the file viewable by anyone with the link (Type _Anyone_, Role _Reader_, not discoverable).
-   - **HTTP › Make a request** sends `POST https://api.buffer.com` with the same `createPost` GraphQL mutation upstream CVM sent directly. It includes `"text": {{captionJson}}`, a video asset at `https://drive.usercontent.google.com/download?id={{googleDriveFileId}}&export=download&confirm=t`, and `mode: shareNow`. The Buffer token comes from a Make API-key keychain, `Authorization: Bearer …`. Parse response is off.
-   - **Webhooks › Webhook response** returns 200 with Buffer's raw response as the body.
-4. CVM reads that response. A post ID becomes the post's remote ID. A `MutationError` or GraphQL error fails the post, so it is not marked posted.
+What is kept: the Post tab still drafts a title, description and thumbnail
+(including the AI generators for them), the Shorts editor still records,
+edits, exports and renders vertical video, and the AI Hero, newsletter and
+skills-changelog posting paths are untouched.
 
-Make's own Buffer app is not used, because it cannot attach video.
-
-### Finishing the scenario (one-time)
-
-- In Make, go to **Credentials › Keys**, open **Buffer API token**, and replace the placeholder with `Bearer <your Buffer API token>`.
-- In the HTTP module body, replace `YOUR_BUFFER_CHANNEL_ID` with the Buffer channel ID. Upstream kept this in `BUFFER_CHANNEL_ID`.
-- Switch the scenario **on**. While it is off, Make queues incoming calls and answers `Accepted`. CVM counts that as handed off, and the queued posts publish when the scenario is switched on.
+The `youtube_auth` table is still in the schema, unused. Migrations here are
+additive-only, so dropping it is a separate two-step change.

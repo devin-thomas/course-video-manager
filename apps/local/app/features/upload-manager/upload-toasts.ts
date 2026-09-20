@@ -5,54 +5,7 @@ import type { uploadReducer } from "./upload-reducer";
  * Shows a toast notification when an upload transitions to "success".
  */
 export function showSuccessToast(upload: uploadReducer.UploadEntry): void {
-  if (upload.uploadType === "buffer") {
-    const postUrl = `/videos/${upload.videoId}/post`;
-
-    toast.success(`"${upload.title}" sent to Buffer`, {
-      duration: Infinity,
-      cancel: {
-        label: "Go to Post",
-        onClick: () => {
-          window.location.href = postUrl;
-        },
-      },
-    });
-  } else if (upload.uploadType === "youtube") {
-    const postUrl = `/videos/${upload.videoId}/post`;
-
-    toast.success(`"${upload.title}" uploaded to YouTube`, {
-      duration: Infinity,
-      action: upload.youtubeVideoId
-        ? {
-            label: "Copy YouTube Studio Link",
-            onClick: () =>
-              navigator.clipboard.writeText(
-                `https://studio.youtube.com/video/${upload.youtubeVideoId}/edit`
-              ),
-          }
-        : undefined,
-      cancel: {
-        label: "Go to Post",
-        onClick: () => {
-          window.location.href = postUrl;
-        },
-      },
-    });
-  } else if (upload.uploadType === "youtube-shorts") {
-    toast.success(`"${upload.title}" posted as YouTube Short`, {
-      duration: Infinity,
-      action: upload.youtubeVideoId
-        ? {
-            label: "Open on YouTube",
-            onClick: () =>
-              window.open(
-                `https://youtube.com/shorts/${upload.youtubeVideoId}`,
-                "_blank"
-              ),
-          }
-        : undefined,
-    });
-  } else if (upload.uploadType === "ai-hero") {
+  if (upload.uploadType === "ai-hero") {
     const aiHeroPageUrl = `/videos/${upload.videoId}/ai-hero`;
 
     toast.success(`"${upload.title}" posted to AI Hero`, {

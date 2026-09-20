@@ -36,6 +36,7 @@ describe("ai-hero registry entry", () => {
 
       const entry = aiHeroConfig.createEntry(base, {
         type: "START_UPLOAD",
+        uploadType: "ai-hero",
         uploadId: "upload-1",
         videoId: "video-1",
         title: "AI Hero Post",
@@ -53,6 +54,7 @@ describe("ai-hero registry entry", () => {
 
       const entry = aiHeroConfig.createEntry(base, {
         type: "START_UPLOAD",
+        uploadType: "ai-hero",
         uploadId: "upload-1",
         videoId: "video-1",
         title: "AI Hero Post",
@@ -219,6 +221,7 @@ describe("skills-changelog registry entry", () => {
 
       const entry = skillsChangelogConfig.createEntry(base, {
         type: "START_UPLOAD",
+        uploadType: "skills-changelog",
         uploadId: "upload-1",
         videoId: "video-1",
         title: "Skills Changelog Post",
@@ -236,6 +239,7 @@ describe("skills-changelog registry entry", () => {
 
       const entry = skillsChangelogConfig.createEntry(base, {
         type: "START_UPLOAD",
+        uploadType: "skills-changelog",
         uploadId: "upload-1",
         videoId: "video-1",
         title: "Skills Changelog Post",

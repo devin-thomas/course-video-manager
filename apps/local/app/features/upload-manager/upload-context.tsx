@@ -12,20 +12,6 @@ import { uploadTypeRegistry } from "./upload-type-registry";
 
 export interface UploadContextType {
   uploads: uploadReducer.State["uploads"];
-  startUpload: (
-    videoId: string,
-    title: string,
-    description: string,
-    privacyStatus: "public" | "unlisted",
-    thumbnailId: string,
-    dependsOn?: string
-  ) => string;
-  startSocialUpload: (
-    videoId: string,
-    title: string,
-    caption: string,
-    dependsOn?: string
-  ) => string;
   startAiHeroUpload: (
     videoId: string,
     title: string,
@@ -43,12 +29,6 @@ export interface UploadContextType {
     newsletterSubject: string,
     newsletterPreviewText: string,
     newsletterCopy: string,
-    dependsOn?: string
-  ) => string;
-  startYoutubeShortsUpload: (
-    videoId: string,
-    title: string,
-    description: string,
     dependsOn?: string
   ) => string;
   startExportUpload: (videoId: string, title: string) => string;
@@ -118,116 +98,6 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
   // Maps videoId → uploadId for batch exports
   const batchVideoIdToUploadIdRef = useRef<Map<string, string>>(new Map());
-
-  const startUpload = useCallback(
-    (
-      videoId: string,
-      title: string,
-      description: string,
-      privacyStatus: "public" | "unlisted",
-      thumbnailId: string,
-      dependsOn?: string
-    ) => {
-      const uploadId = generateUploadId();
-
-      const params = { description, privacyStatus, thumbnailId };
-      paramsMapRef.current.set(uploadId, { type: "youtube", params });
-
-      const action = {
-        type: "START_UPLOAD" as const,
-        uploadId,
-        videoId,
-        title,
-        dependsOn,
-      };
-      dispatch(action);
-
-      if (!dependsOn) {
-        initiateFromRegistry(
-          "youtube",
-          action,
-          params,
-          dispatch,
-          abortControllersRef.current
-        );
-      }
-
-      return uploadId;
-    },
-    []
-  );
-
-  const startSocialUpload = useCallback(
-    (videoId: string, title: string, caption: string, dependsOn?: string) => {
-      const uploadId = generateUploadId();
-
-      const params = { caption };
-      paramsMapRef.current.set(uploadId, { type: "buffer", params });
-
-      const action = {
-        type: "START_UPLOAD" as const,
-        uploadId,
-        videoId,
-        title,
-        uploadType: "buffer" as const,
-        dependsOn,
-      };
-      dispatch(action);
-
-      if (!dependsOn) {
-        initiateFromRegistry(
-          "buffer",
-          action,
-          params,
-          dispatch,
-          abortControllersRef.current
-        );
-      }
-
-      return uploadId;
-    },
-    []
-  );
-
-  const startYoutubeShortsUpload = useCallback(
-    (
-      videoId: string,
-      title: string,
-      description: string,
-      dependsOn?: string
-    ) => {
-      const uploadId = generateUploadId();
-
-      const params = { description };
-      paramsMapRef.current.set(uploadId, {
-        type: "youtube-shorts",
-        params,
-      });
-
-      const action = {
-        type: "START_UPLOAD" as const,
-        uploadId,
-        videoId,
-        title,
-        uploadType: "youtube-shorts" as const,
-        dependsOn,
-      };
-      dispatch(action);
-
-      if (!dependsOn) {
-        initiateFromRegistry(
-          "youtube-shorts",
-          action,
-          params,
-          dispatch,
-          abortControllersRef.current
-        );
-      }
-
-      return uploadId;
-    },
-    []
-  );
 
   const startAiHeroUpload = useCallback(
     (
@@ -596,9 +466,6 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     <UploadContext.Provider
       value={{
         uploads: state.uploads,
-        startUpload,
-        startSocialUpload,
-        startYoutubeShortsUpload,
         startAiHeroUpload,
         startSkillsChangelogUpload,
         startExportUpload,

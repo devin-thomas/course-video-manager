@@ -25,16 +25,6 @@ const EXPORT_STAGE_BANDS: Record<uploadReducer.ExportStage, StageBand> = {
   "normalizing-audio": { start: 80, width: 19 },
 };
 
-// Only the blob upload streams a real byte percentage; Buffer's own pipeline
-// gives us stage transitions and nothing finer.
-export const BUFFER_STAGE_BANDS: Record<uploadReducer.BufferStage, StageBand> =
-  {
-    "uploading-blob": { start: 0, width: 50 },
-    "creating-post": { start: 50, width: 0 },
-    polling: { start: 70, width: 0 },
-    "cleaning-up": { start: 90, width: 0 },
-  };
-
 // A Publish's stages are only sequential either side of the work: it
 // validates, Submits (freezing, cloning), and only then encodes and uploads —
 // and those two overlap, so neither can own a band of its own. The bands here
@@ -112,20 +102,6 @@ export const isSettled = (upload: uploadReducer.UploadEntry) =>
 /** Where in the bar `percent` (0–100, within the stage) lands. */
 export const fillBand = (band: StageBand, percent: number) =>
   band.start + Math.floor((percent / 100) * band.width);
-
-/**
- * The band a raw `UPDATE_PROGRESS` percentage belongs to. `null` when the job
- * streams a real percentage for its whole life rather than per stage, in which
- * case the percentage already *is* the bar position.
- */
-export const streamedProgressBand = (
-  upload: uploadReducer.UploadEntry
-): StageBand | null => {
-  if (upload.uploadType === "buffer" && upload.bufferStage) {
-    return BUFFER_STAGE_BANDS[upload.bufferStage];
-  }
-  return null;
-};
 
 /**
  * A Publish's bar, once it has per-Video children, is the byte-weighted mean

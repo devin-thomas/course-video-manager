@@ -11,16 +11,16 @@ const createState = (
   ...overrides,
 });
 
-const createYouTubeEntry = (
-  overrides: Partial<Omit<uploadReducer.YouTubeUploadEntry, "uploadType">> = {}
-): uploadReducer.YouTubeUploadEntry => ({
+const createAiHeroEntry = (
+  overrides: Partial<Omit<uploadReducer.AiHeroUploadEntry, "uploadType">> = {}
+): uploadReducer.AiHeroUploadEntry => ({
   uploadId: "upload-1",
   videoId: "video-1",
   title: "Test Video",
   progress: 0,
   status: "uploading",
-  uploadType: "youtube",
-  youtubeVideoId: null,
+  uploadType: "ai-hero",
+  aiHeroSlug: null,
   errorMessage: null,
   retryCount: 0,
   terminal: false,
@@ -33,6 +33,7 @@ describe("START_UPLOAD", () => {
   it("should create entry via registry with uploading status", () => {
     const state = reduce(createState(), {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "upload-1",
       videoId: "video-1",
       title: "My Video",
@@ -46,24 +47,14 @@ describe("START_UPLOAD", () => {
     expect(upload.dependsOn).toBeNull();
   });
 
-  it("should default uploadType to youtube", () => {
-    const state = reduce(createState(), {
-      type: "START_UPLOAD",
-      uploadId: "upload-1",
-      videoId: "video-1",
-      title: "My Video",
-    });
-
-    expect(state.uploads["upload-1"]!.uploadType).toBe("youtube");
-  });
-
   it("should not affect existing uploads", () => {
-    const existing = createYouTubeEntry({
+    const existing = createAiHeroEntry({
       uploadId: "upload-1",
       progress: 50,
     });
     const state = reduce(createState({ uploads: { "upload-1": existing } }), {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "upload-2",
       videoId: "video-2",
       title: "Second Video",
@@ -74,7 +65,7 @@ describe("START_UPLOAD", () => {
   });
 
   it("should overwrite if same uploadId is started again", () => {
-    const existing = createYouTubeEntry({
+    const existing = createAiHeroEntry({
       uploadId: "upload-1",
       progress: 50,
       status: "error",
@@ -82,6 +73,7 @@ describe("START_UPLOAD", () => {
     });
     const state = reduce(createState({ uploads: { "upload-1": existing } }), {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "upload-1",
       videoId: "video-1",
       title: "Restarted Video",
@@ -103,6 +95,7 @@ describe("START_UPLOAD", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "yt-1",
       videoId: "video-1",
       title: "Upload",
@@ -115,8 +108,6 @@ describe("START_UPLOAD", () => {
 
   it("should create type-specific entries via registry for each upload type", () => {
     const types: uploadReducer.UploadType[] = [
-      "youtube",
-      "buffer",
       "ai-hero",
       "skills-changelog",
       "export",
@@ -143,7 +134,7 @@ describe("UPDATE_PROGRESS", () => {
   it("should update progress for existing upload", () => {
     const state = reduce(
       createState({
-        uploads: { "upload-1": createYouTubeEntry() },
+        uploads: { "upload-1": createAiHeroEntry() },
       }),
       { type: "UPDATE_PROGRESS", uploadId: "upload-1", progress: 42 }
     );
@@ -163,11 +154,11 @@ describe("UPDATE_PROGRESS", () => {
   });
 
   it("should not affect other uploads", () => {
-    const upload1 = createYouTubeEntry({
+    const upload1 = createAiHeroEntry({
       uploadId: "upload-1",
       progress: 10,
     });
-    const upload2 = createYouTubeEntry({
+    const upload2 = createAiHeroEntry({
       uploadId: "upload-2",
       progress: 20,
     });
@@ -188,13 +179,13 @@ describe("UPLOAD_SUCCESS", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ progress: 95 }),
+          "upload-1": createAiHeroEntry({ progress: 95 }),
         },
       }),
       {
         type: "UPLOAD_SUCCESS",
         uploadId: "upload-1",
-        youtubeVideoId: "yt-abc123",
+        aiHeroSlug: "post-abc123",
       }
     );
 
@@ -218,7 +209,7 @@ describe("UPLOAD_SUCCESS", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({
+          "upload-1": createAiHeroEntry({
             errorMessage: "previous error",
             status: "uploading",
           }),
@@ -227,7 +218,7 @@ describe("UPLOAD_SUCCESS", () => {
       {
         type: "UPLOAD_SUCCESS",
         uploadId: "upload-1",
-        youtubeVideoId: "yt-abc",
+        aiHeroSlug: "post-abc",
       }
     );
 
@@ -240,7 +231,7 @@ describe("UPLOAD_FATAL_ERROR", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ retryCount: 0 }),
+          "upload-1": createAiHeroEntry({ retryCount: 0 }),
         },
       }),
       {
@@ -263,7 +254,7 @@ describe("UPLOAD_ERROR", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ retryCount: 0 }),
+          "upload-1": createAiHeroEntry({ retryCount: 0 }),
         },
       }),
       {
@@ -283,7 +274,7 @@ describe("UPLOAD_ERROR", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ retryCount: 1 }),
+          "upload-1": createAiHeroEntry({ retryCount: 1 }),
         },
       }),
       {
@@ -301,7 +292,7 @@ describe("UPLOAD_ERROR", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ retryCount: 2 }),
+          "upload-1": createAiHeroEntry({ retryCount: 2 }),
         },
       }),
       {
@@ -334,7 +325,7 @@ describe("RETRY", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({
+          "upload-1": createAiHeroEntry({
             status: "retrying",
             retryCount: 1,
             progress: 50,
@@ -364,7 +355,7 @@ describe("RETRY", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({
+          "upload-1": createAiHeroEntry({
             status: "retrying",
             retryCount: 1,
           }),
@@ -373,7 +364,7 @@ describe("RETRY", () => {
       { type: "RETRY", uploadId: "upload-1" }
     );
 
-    expect(state.uploads["upload-1"]!.uploadType).toBe("youtube");
+    expect(state.uploads["upload-1"]!.uploadType).toBe("ai-hero");
   });
 });
 
@@ -382,7 +373,7 @@ describe("DISMISS", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ status: "success" }),
+          "upload-1": createAiHeroEntry({ status: "success" }),
         },
       }),
       { type: "DISMISS", uploadId: "upload-1" }
@@ -393,14 +384,14 @@ describe("DISMISS", () => {
   });
 
   it("should not affect other uploads", () => {
-    const upload2 = createYouTubeEntry({
+    const upload2 = createAiHeroEntry({
       uploadId: "upload-2",
       videoId: "video-2",
     });
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry(),
+          "upload-1": createAiHeroEntry(),
           "upload-2": upload2,
         },
       }),
@@ -412,7 +403,7 @@ describe("DISMISS", () => {
   });
 
   it("should handle dismissing non-existent upload gracefully", () => {
-    const upload1 = createYouTubeEntry();
+    const upload1 = createAiHeroEntry();
     const state = reduce(createState({ uploads: { "upload-1": upload1 } }), {
       type: "DISMISS",
       uploadId: "non-existent",
@@ -425,7 +416,7 @@ describe("DISMISS", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({
+          "upload-1": createAiHeroEntry({
             status: "uploading",
             progress: 50,
           }),

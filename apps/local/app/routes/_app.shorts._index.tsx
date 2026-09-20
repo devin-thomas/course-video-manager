@@ -7,22 +7,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import {
-  ShortsPostingModal,
-  type ShortsPostingMode,
-} from "@/features/video-posting/shorts-posting-modal";
 import { UploadContext } from "@/features/upload-manager/upload-context";
 import { useFocusRevalidate } from "@/hooks/use-focus-revalidate";
 import { useUploadRevalidate } from "@/hooks/use-upload-revalidate";
-import {
-  getShortStatus,
-  STATUS_META,
-  type PostedPlatforms,
-} from "@/lib/short-status";
-import { SiYoutube, SiTiktok } from "@icons-pack/react-simple-icons";
+import { getShortStatus, STATUS_META } from "@/lib/short-status";
 import { formatSecondsToTimeCode } from "@/services/utils";
 import { VideoOperationsService } from "@/services/db-video-operations.server";
-import { VideoPostOperationsService } from "@/services/db-video-post-operations.server";
 import { makeLoader } from "@/services/route-action.server";
 import { Effect, Config } from "effect";
 import { FileSystem } from "@effect/platform";
@@ -32,22 +22,12 @@ import {
   FolderOpen,
   PencilIcon,
   Plus,
-  SendIcon,
   Trash2,
   VideoIcon,
 } from "lucide-react";
 import { useContext, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import type { Route } from "./+types/_app.shorts._index";
-
-const POST_OPTIONS: Array<{
-  label: string;
-  mode: ShortsPostingMode;
-}> = [
-  { label: "Post Short", mode: "both" },
-  { label: "Post to YouTube", mode: "youtube" },
-  { label: "Post to TikTok", mode: "tiktok" },
-];
 
 export const meta: Route.MetaFunction = () => {
   return [{ title: "CVM - Shorts" }];
@@ -57,7 +37,6 @@ export const loader = makeLoader({
   effect: () =>
     Effect.gen(function* () {
       const videoOps = yield* VideoOperationsService;
-      const videoPostOps = yield* VideoPostOperationsService;
       const fs = yield* FileSystem.FileSystem;
       const finishedDir = yield* Config.string("FINISHED_VIDEOS_DIRECTORY");
 
@@ -66,25 +45,14 @@ export const loader = makeLoader({
       });
 
       const exportedMap: Record<string, boolean> = {};
-      const postedMap: Record<string, PostedPlatforms> = {};
       yield* Effect.forEach(shorts, (video) =>
         Effect.gen(function* () {
           const mp4Path = `${finishedDir}/${video.id}.mp4`;
           exportedMap[video.id] = yield* fs.exists(mp4Path);
-
-          const posts = yield* videoPostOps.listByVideoId(video.id);
-          postedMap[video.id] = {
-            youtube: posts.some(
-              (p) => p.platform === "youtube-shorts" && p.postedAt !== null
-            ),
-            tiktok: posts.some(
-              (p) => p.platform === "buffer" && p.postedAt !== null
-            ),
-          };
         })
       );
 
-      return { shorts, exportedMap, postedMap };
+      return { shorts, exportedMap };
     }),
 });
 
@@ -122,7 +90,7 @@ function RecordTile() {
 }
 
 export default function ShortsIndex(props: Route.ComponentProps) {
-  const { shorts, exportedMap, postedMap } = props.loaderData;
+  const { shorts, exportedMap } = props.loaderData;
   const [videoToDelete, setVideoToDelete] = useState<{
     id: string;
     title: string;
@@ -131,21 +99,11 @@ export default function ShortsIndex(props: Route.ComponentProps) {
     id: string;
     title: string;
   } | null>(null);
-  const [videoToPost, setVideoToPost] = useState<{
-    id: string;
-    title: string;
-    mode: ShortsPostingMode;
-  } | null>(null);
   const revealFetcher = useFetcher();
   const { startExportUpload } = useContext(UploadContext);
 
   useFocusRevalidate({ enabled: true });
-  useUploadRevalidate([
-    "buffer",
-    "youtube-shorts",
-    "render-vertical",
-    "export",
-  ]);
+  useUploadRevalidate(["render-vertical", "export"]);
 
   return (
     <div className="flex-1 flex flex-col bg-background text-foreground">
@@ -180,24 +138,11 @@ export default function ShortsIndex(props: Route.ComponentProps) {
             />
           )}
 
-          {videoToPost && (
-            <ShortsPostingModal
-              open={true}
-              onOpenChange={(open) => {
-                if (!open) setVideoToPost(null);
-              }}
-              videoId={videoToPost.id}
-              videoTitle={videoToPost.title}
-              mode={videoToPost.mode}
-            />
-          )}
-
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             <RecordTile />
             {shorts.map((video) => {
-              const status = getShortStatus(video.id, exportedMap, postedMap);
+              const status = getShortStatus(video.id, exportedMap);
               const StatusIcon = STATUS_META[status].icon;
-              const posted = postedMap[video.id];
               const totalDuration = video.clips.reduce(
                 (acc, clip) =>
                   acc + (clip.sourceEndTime - clip.sourceStartTime),
@@ -227,26 +172,6 @@ export default function ShortsIndex(props: Route.ComponentProps) {
                             {formatSecondsToTimeCode(totalDuration)}
                           </div>
                         )}
-                        {(posted?.youtube || posted?.tiktok) && (
-                          <div className="absolute top-2 left-2 flex gap-1">
-                            {posted?.youtube && (
-                              <span
-                                title="Posted to YouTube"
-                                className="flex items-center justify-center bg-black/70 text-white rounded p-1"
-                              >
-                                <SiYoutube className="w-3 h-3" />
-                              </span>
-                            )}
-                            {posted?.tiktok && (
-                              <span
-                                title="Posted to TikTok"
-                                className="flex items-center justify-center bg-black/70 text-white rounded p-1"
-                              >
-                                <SiTiktok className="w-3 h-3" />
-                              </span>
-                            )}
-                          </div>
-                        )}
                       </div>
                       <div className="p-2">
                         <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground mb-0.5">
@@ -260,21 +185,6 @@ export default function ShortsIndex(props: Route.ComponentProps) {
                     </Link>
                   </ContextMenuTrigger>
                   <ContextMenuContent>
-                    {POST_OPTIONS.map((option) => (
-                      <ContextMenuItem
-                        key={option.mode}
-                        onSelect={() =>
-                          setVideoToPost({
-                            id: video.id,
-                            title: video.title,
-                            mode: option.mode,
-                          })
-                        }
-                      >
-                        <SendIcon className="w-4 h-4" />
-                        {option.label}
-                      </ContextMenuItem>
-                    ))}
                     <ContextMenuSeparator />
                     <ContextMenuItem
                       onSelect={() =>

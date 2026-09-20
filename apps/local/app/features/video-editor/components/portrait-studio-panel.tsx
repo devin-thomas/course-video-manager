@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { LiveMediaStream } from "./live-media-stream";
 import { SilenceLengthToggle } from "./silence-length-toggle";
@@ -14,7 +13,7 @@ import {
   getShowScrubSlider as getShowScrubSliderSelector,
 } from "../video-editor-selectors";
 import { formatSecondsToTimeCode } from "@/services/utils";
-import { SendIcon, VideoOffIcon } from "lucide-react";
+import { VideoOffIcon } from "lucide-react";
 import { useFetcher } from "react-router";
 import { useContextSelector } from "use-context-selector";
 import { VideoEditorContext } from "../video-editor-context";
@@ -26,10 +25,6 @@ import {
   type ChangeEvent,
 } from "react";
 import { UploadContext } from "@/features/upload-manager/upload-context";
-import {
-  ShortsPostingModal,
-  type ShortsPostingMode,
-} from "@/features/video-posting/shorts-posting-modal";
 
 export const PortraitStudioPanel = () => {
   const videoTitle = useContextSelector(
@@ -149,13 +144,6 @@ export const PortraitStudioPanel = () => {
     (ctx) => ctx.setIsCopyVideoModalOpen
   );
   const revealVideoFetcher = useFetcher();
-
-  const [isPostingModalOpen, setIsPostingModalOpen] = useState(false);
-  const [postingMode, setPostingMode] = useState<ShortsPostingMode>("both");
-  const openPostingModal = useCallback((mode: ShortsPostingMode) => {
-    setPostingMode(mode);
-    setIsPostingModalOpen(true);
-  }, []);
 
   const [exportFileExists, setExportFileExists] = useState(false);
   useEffect(() => {
@@ -291,9 +279,6 @@ export const PortraitStudioPanel = () => {
             onRenderVertical={() =>
               startRenderVerticalUpload(videoId, videoTitle)
             }
-            onPostShorts={() => openPostingModal("both")}
-            onPostYoutube={() => openPostingModal("youtube")}
-            onPostTiktok={() => openPostingModal("tiktok")}
             videoId={videoId}
             isCopied={isCopied}
             copyTranscriptToClipboard={copyTranscriptToClipboard}
@@ -318,20 +303,8 @@ export const PortraitStudioPanel = () => {
             isLogPathCopied={isLogPathCopied}
             copyLogPathToClipboard={copyLogPathToClipboard}
           />
-          <Button size="sm" onClick={() => openPostingModal("both")}>
-            <SendIcon className="w-3.5 h-3.5 mr-1" />
-            Post
-          </Button>
         </div>
       </div>
-
-      <ShortsPostingModal
-        open={isPostingModalOpen}
-        onOpenChange={setIsPostingModalOpen}
-        videoId={videoId}
-        videoTitle={videoTitle}
-        mode={postingMode}
-      />
     </div>
   );
 };

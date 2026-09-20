@@ -11,16 +11,16 @@ const createState = (
   ...overrides,
 });
 
-const createYouTubeEntry = (
-  overrides: Partial<Omit<uploadReducer.YouTubeUploadEntry, "uploadType">> = {}
-): uploadReducer.YouTubeUploadEntry => ({
+const createAiHeroEntry = (
+  overrides: Partial<Omit<uploadReducer.AiHeroUploadEntry, "uploadType">> = {}
+): uploadReducer.AiHeroUploadEntry => ({
   uploadId: "upload-1",
   videoId: "video-1",
   title: "Test Video",
   progress: 0,
   status: "uploading",
-  uploadType: "youtube",
-  youtubeVideoId: null,
+  uploadType: "ai-hero",
+  aiHeroSlug: null,
   errorMessage: null,
   retryCount: 0,
   terminal: false,
@@ -41,9 +41,10 @@ describe("dependency chains", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "yt-1",
       videoId: "video-1",
-      title: "Upload to YouTube",
+      title: "Post to AI Hero",
       dependsOn: "export-1",
     });
 
@@ -62,6 +63,7 @@ describe("dependency chains", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "yt-1",
       videoId: "video-1",
       title: "Upload",
@@ -88,6 +90,7 @@ describe("dependency chains", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "yt-1",
       videoId: "video-1",
       title: "Upload",
@@ -126,6 +129,7 @@ describe("dependency chains", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "yt-1",
       videoId: "video-1",
       title: "Upload",
@@ -153,9 +157,10 @@ describe("dependency chains", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "yt-1",
       videoId: "video-1",
-      title: "YouTube",
+      title: "AI Hero",
       dependsOn: "export-1",
     });
     state = reduce(state, {
@@ -179,7 +184,7 @@ describe("dependency chains", () => {
   it("should preserve dependsOn through retry", () => {
     let state = createState({
       uploads: {
-        "yt-1": createYouTubeEntry({
+        "yt-1": createAiHeroEntry({
           uploadId: "yt-1",
           status: "uploading",
           dependsOn: "export-1",
@@ -205,18 +210,21 @@ describe("concurrent uploads", () => {
 
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "upload-1",
       videoId: "video-1",
       title: "First Video",
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "upload-2",
       videoId: "video-2",
       title: "Second Video",
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "upload-3",
       videoId: "video-3",
       title: "Third Video",
@@ -228,9 +236,9 @@ describe("concurrent uploads", () => {
   it("should handle mixed statuses across uploads", () => {
     let state = createState({
       uploads: {
-        "upload-1": createYouTubeEntry({ uploadId: "upload-1" }),
-        "upload-2": createYouTubeEntry({ uploadId: "upload-2" }),
-        "upload-3": createYouTubeEntry({
+        "upload-1": createAiHeroEntry({ uploadId: "upload-1" }),
+        "upload-2": createAiHeroEntry({ uploadId: "upload-2" }),
+        "upload-3": createAiHeroEntry({
           uploadId: "upload-3",
           retryCount: 2,
         }),
@@ -240,7 +248,7 @@ describe("concurrent uploads", () => {
     state = reduce(state, {
       type: "UPLOAD_SUCCESS",
       uploadId: "upload-1",
-      youtubeVideoId: "yt-1",
+      aiHeroSlug: "post-1",
     });
     state = reduce(state, {
       type: "UPLOAD_ERROR",
@@ -263,17 +271,17 @@ describe("concurrent uploads", () => {
 
     state = reduce(state, {
       type: "START_UPLOAD",
-      uploadId: "yt-1",
+      uploadId: "exp-1",
       videoId: "video-1",
-      title: "YouTube Upload",
-      uploadType: "youtube",
+      title: "Export",
+      uploadType: "export",
     });
     state = reduce(state, {
       type: "START_UPLOAD",
-      uploadId: "buf-1",
+      uploadId: "chg-1",
       videoId: "video-1",
-      title: "Buffer Post",
-      uploadType: "buffer",
+      title: "Changelog Post",
+      uploadType: "skills-changelog",
     });
     state = reduce(state, {
       type: "START_UPLOAD",
@@ -283,8 +291,8 @@ describe("concurrent uploads", () => {
       uploadType: "ai-hero",
     });
 
-    expect(state.uploads["yt-1"]!.uploadType).toBe("youtube");
-    expect(state.uploads["buf-1"]!.uploadType).toBe("buffer");
+    expect(state.uploads["exp-1"]!.uploadType).toBe("export");
+    expect(state.uploads["chg-1"]!.uploadType).toBe("skills-changelog");
     expect(state.uploads["ah-1"]!.uploadType).toBe("ai-hero");
   });
 });
@@ -295,6 +303,7 @@ describe("full retry lifecycle", () => {
 
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "upload-1",
       videoId: "video-1",
       title: "Flaky Upload",
@@ -335,6 +344,7 @@ describe("full retry lifecycle", () => {
 
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "ai-hero",
       uploadId: "upload-1",
       videoId: "video-1",
       title: "Eventually Succeeds",
@@ -350,7 +360,7 @@ describe("full retry lifecycle", () => {
     state = reduce(state, {
       type: "UPLOAD_SUCCESS",
       uploadId: "upload-1",
-      youtubeVideoId: "yt-success",
+      aiHeroSlug: "post-success",
     });
 
     expect(state.uploads["upload-1"]!.status).toBe("success");

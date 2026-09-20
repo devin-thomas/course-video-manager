@@ -29,8 +29,6 @@ import { LinkAuthOperationsService } from "@/services/db-link-auth-operations.se
 import { ApiTokenOperationsService } from "@/services/db-api-token-operations.server";
 import { RenderVerticalVideoService } from "./render-vertical-video-service";
 import { VideoPostOperationsService } from "@/services/db-video-post-operations.server";
-import { MakeWebhookService } from "./make-webhook-service.server";
-import { SocialStagingService } from "./social-staging-service.server";
 import { TextGenerationService } from "./text-generation-service";
 import { AutofillService } from "./autofill-service";
 import { DiagramThumbnailStoreLive } from "./diagram-thumbnail-store.server";
@@ -55,8 +53,6 @@ const coreLayer = Layer.mergeAll(
   LinkAuthOperationsService.Default,
   ApiTokenOperationsService.Default,
   VideoPostOperationsService.Default,
-  MakeWebhookService.Default,
-  SocialStagingService.Default,
   TextGenerationService.Default,
   VideoProcessingService.Default,
   BackgroundRemovalService.Default,

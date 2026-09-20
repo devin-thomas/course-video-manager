@@ -59,18 +59,6 @@ describe("UploadRow progress indicator", () => {
     expect(html).toContain("Validating");
   });
 
-  it("shows a progress bar for every in-flight buffer stage, not just the blob upload", () => {
-    const html = render({
-      ...base,
-      progress: 70,
-      uploadType: "buffer",
-      bufferStage: "polling",
-    });
-
-    expect(bars(html)).toEqual([70]);
-    expect(html).toContain("Waiting for delivery");
-  });
-
   it("labels an in-flight vertical render with its stage", () => {
     const html = render({
       ...base,
@@ -87,8 +75,8 @@ describe("UploadRow progress indicator", () => {
     const html = render({
       ...base,
       progress: 63,
-      uploadType: "youtube",
-      youtubeVideoId: null,
+      uploadType: "ai-hero",
+      aiHeroSlug: null,
     });
 
     expect(bars(html)).toEqual([63]);
@@ -99,8 +87,8 @@ describe("UploadRow progress indicator", () => {
     const html = render({
       ...base,
       status: "waiting",
-      uploadType: "youtube",
-      youtubeVideoId: null,
+      uploadType: "ai-hero",
+      aiHeroSlug: null,
       dependsOn: "u0",
       parentUploadId: null,
     });

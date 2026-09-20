@@ -1,12 +1,5 @@
 import type { uploadReducer } from "./upload-reducer";
 
-const BUFFER_STAGE_LABELS: Record<uploadReducer.BufferStage, string> = {
-  "uploading-blob": "Staging in Google Drive",
-  "creating-post": "Sending to Make",
-  polling: "Waiting for delivery",
-  "cleaning-up": "Cleaning up",
-};
-
 const EXPORT_STAGE_LABELS: Record<uploadReducer.ExportStage, string> = {
   queued: "Queued",
   "concatenating-clips": "Concatenating clips",
@@ -72,10 +65,6 @@ export function uploadStageLabel(
     case "autofill":
       return upload.autofillStage
         ? AUTOFILL_STAGE_LABELS[upload.autofillStage]
-        : null;
-    case "buffer":
-      return upload.bufferStage
-        ? BUFFER_STAGE_LABELS[upload.bufferStage]
         : null;
     case "render-vertical":
       return upload.renderVerticalStage

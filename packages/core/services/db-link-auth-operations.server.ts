@@ -1,7 +1,6 @@
 import { DrizzleService, type Database } from "./drizzle-service.server.js";
 import {
   links,
-  youtubeAuth,
   aiHeroAuth,
   dropboxAuth,
   googleDriveAuth,
@@ -54,80 +53,6 @@ export const createLinkAuthOperations = (db: Database) => {
 
   const deleteLink = Effect.fn("deleteLink")(function* (linkId: string) {
     yield* makeDbCall(() => db.delete(links).where(eq(links.id, linkId)));
-    return { success: true };
-  });
-
-  const getYoutubeAuth = Effect.fn("getYoutubeAuth")(function* () {
-    const auth = yield* makeDbCall(() => db.query.youtubeAuth.findFirst());
-    return auth ?? null;
-  });
-
-  const upsertYoutubeAuth = Effect.fn("upsertYoutubeAuth")(function* (tokens: {
-    accessToken: string;
-    refreshToken: string;
-    expiresAt: Date;
-  }) {
-    yield* makeDbCall(() => db.delete(youtubeAuth));
-
-    const [newAuth] = yield* makeDbCall(() =>
-      db
-        .insert(youtubeAuth)
-        .values({
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-          expiresAt: tokens.expiresAt,
-        })
-        .returning()
-    );
-
-    if (!newAuth) {
-      return yield* new UnknownDBServiceError({
-        cause: "No YouTube auth was returned from the database",
-      });
-    }
-
-    return newAuth;
-  });
-
-  const updateYoutubeAccessToken = Effect.fn("updateYoutubeAccessToken")(
-    function* (tokens: { accessToken: string; expiresAt: Date }) {
-      const existing = yield* makeDbCall(() =>
-        db.query.youtubeAuth.findFirst()
-      );
-
-      if (!existing) {
-        return yield* new NotFoundError({
-          type: "updateYoutubeAccessToken",
-          params: {},
-          message: "No YouTube auth found to update",
-        });
-      }
-
-      const [updated] = yield* makeDbCall(() =>
-        db
-          .update(youtubeAuth)
-          .set({
-            accessToken: tokens.accessToken,
-            expiresAt: tokens.expiresAt,
-            updatedAt: new Date(),
-          })
-          .where(eq(youtubeAuth.id, existing.id))
-          .returning()
-      );
-
-      if (!updated) {
-        return yield* new NotFoundError({
-          type: "updateYoutubeAccessToken",
-          params: {},
-        });
-      }
-
-      return updated;
-    }
-  );
-
-  const deleteYoutubeAuth = Effect.fn("deleteYoutubeAuth")(function* () {
-    yield* makeDbCall(() => db.delete(youtubeAuth));
     return { success: true };
   });
 
@@ -322,10 +247,6 @@ export const createLinkAuthOperations = (db: Database) => {
     getLinks,
     createLink,
     deleteLink,
-    getYoutubeAuth,
-    upsertYoutubeAuth,
-    updateYoutubeAccessToken,
-    deleteYoutubeAuth,
     getAiHeroAuth,
     upsertAiHeroAuth,
     deleteAiHeroAuth,

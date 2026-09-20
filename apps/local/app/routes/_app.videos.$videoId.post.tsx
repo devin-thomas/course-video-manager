@@ -3,7 +3,6 @@
 export const handle = { fullscreen: true };
 
 import { loadVideoPostingContext } from "@/services/video-posting-context.server";
-import { LinkAuthOperationsService } from "@/services/db-link-auth-operations.server";
 import { ThumbnailOperationsService } from "@/services/db-thumbnail-operations.server";
 import { PitchOperationsService } from "@/services/db-pitch-operations.server";
 import { makeLoader } from "@/services/route-action.server";
@@ -27,14 +26,12 @@ export const loader = makeLoader({
     Effect.gen(function* () {
       const videoId = params.videoId!;
       const ctx = yield* loadVideoPostingContext(videoId);
-      const linkAuthOps = yield* LinkAuthOperationsService;
       const thumbnailOps = yield* ThumbnailOperationsService;
       const pitchOps = yield* PitchOperationsService;
       const publishService = yield* CoursePublishService;
 
-      const [youtubeAuth, videoThumbnails, videoExists] = yield* Effect.all(
+      const [videoThumbnails, videoExists] = yield* Effect.all(
         [
-          linkAuthOps.getYoutubeAuth(),
           thumbnailOps.getThumbnailsByVideoId(videoId),
           publishService.isExported(videoId),
         ],
@@ -50,7 +47,6 @@ export const loader = makeLoader({
       return {
         ...ctx,
         videoExists,
-        isYoutubeAuthenticated: youtubeAuth !== null,
         thumbnails: videoThumbnails,
         pitchYoutubeTitle: pitch?.youtubeTitle ?? null,
       };
@@ -85,7 +81,6 @@ export default function PostPageRoute(props: Route.ComponentProps) {
     chapters,
     links,
     courseStructure,
-    isYoutubeAuthenticated,
     thumbnails,
     videoExists,
     pitchYoutubeTitle,
@@ -220,7 +215,6 @@ export default function PostPageRoute(props: Route.ComponentProps) {
         <div className="w-3/4 flex flex-col p-6 overflow-y-auto scrollbar scrollbar-track-transparent scrollbar-thumb-muted hover:scrollbar-thumb-muted-foreground">
           <PostPage
             videoId={videoId}
-            isYoutubeAuthenticated={isYoutubeAuthenticated}
             thumbnails={thumbnails}
             enabledFiles={enabledFiles}
             enabledSections={enabledSections}

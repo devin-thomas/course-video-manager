@@ -24,10 +24,10 @@ const makeExportEntry = (
   ...overrides,
 });
 
-const makeYouTubeEntry = (
-  overrides: Partial<uploadReducer.YouTubeUploadEntry> = {}
-): uploadReducer.YouTubeUploadEntry => ({
-  uploadId: "yt-1",
+const makeAiHeroEntry = (
+  overrides: Partial<uploadReducer.AiHeroUploadEntry> = {}
+): uploadReducer.AiHeroUploadEntry => ({
+  uploadId: "post-1",
   videoId: "video-1",
   title: "Test Video",
   progress: 0,
@@ -37,8 +37,8 @@ const makeYouTubeEntry = (
   terminal: false,
   dependsOn: null,
   parentUploadId: null,
-  uploadType: "youtube",
-  youtubeVideoId: null,
+  uploadType: "ai-hero",
+  aiHeroSlug: null,
   ...overrides,
 });
 
@@ -96,14 +96,14 @@ describe("hasActiveExportUploads", () => {
 
   it("ignores non-export upload types", () => {
     const uploads: Record<string, uploadReducer.UploadEntry> = {
-      "yt-1": makeYouTubeEntry({ status: "uploading" }),
+      "post-1": makeAiHeroEntry({ status: "uploading" }),
     };
     expect(hasActiveExportUploads(uploads)).toBe(false);
   });
 
   it("detects active exports among mixed upload types", () => {
     const uploads: Record<string, uploadReducer.UploadEntry> = {
-      "yt-1": makeYouTubeEntry({ status: "success" }),
+      "post-1": makeAiHeroEntry({ status: "success" }),
       "upload-1": makeExportEntry({ status: "uploading" }),
     };
     expect(hasActiveExportUploads(uploads)).toBe(true);
