@@ -9,9 +9,6 @@ const VIDEO_SUB_ROUTES = [
   "_app.videos.$videoId.lesson.tsx",
   "_app.videos.$videoId.post.tsx",
   "_app.videos.$videoId.social.tsx",
-  "_app.videos.$videoId.ai-hero.tsx",
-  "_app.videos.$videoId.skills-changelog.tsx",
-  "_app.videos.$videoId.newsletter.tsx",
   "_app.videos.$videoId.move-to-course.tsx",
   "_app.videos.$videoId.thumbnails.tsx",
 ];

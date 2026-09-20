@@ -2,24 +2,17 @@
 
 import { useState } from "react";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { toast } from "sonner";
 import { useFetcher } from "react-router";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { CopyIcon, LinkIcon, Loader2Icon, SparklesIcon } from "lucide-react";
+import { CopyIcon, Loader2Icon, SparklesIcon } from "lucide-react";
 import type { CourseStructure } from "@/components/video-context-panel";
 import type { SectionWithWordCount } from "@/features/article-writer/types";
 import { PostPageOverwriteDialog } from "./post-page-overwrite-dialog";
 import { ThumbnailSelector } from "./post-page-thumbnail-selector";
 import { validateYoutubeTitle } from "./post-page-validation";
 import { getAutoSelectThumbnailId } from "./auto-select-thumbnail";
-import {
-  findConvertibleAiHeroUrls,
-  hasAiHeroUrls,
-  replaceUrls,
-} from "./convert-short-links";
-
 const POST_TITLE_STORAGE_KEY = (videoId: string) => `post-title-${videoId}`;
 const POST_DESCRIPTION_STORAGE_KEY = (videoId: string) =>
   `post-description-${videoId}`;
@@ -178,63 +171,6 @@ export function PostPage({
     });
   };
 
-  // Short link conversion state
-  const [isConvertingShortLinks, setIsConvertingShortLinks] = useState(false);
-
-  const handleConvertToShortLinks = async () => {
-    const convertibleUrls = findConvertibleAiHeroUrls(description);
-
-    if (!hasAiHeroUrls(description)) {
-      toast("No aihero.dev links found", {
-        description: "The description doesn't contain any aihero.dev URLs.",
-      });
-      return;
-    }
-
-    if (convertibleUrls.length === 0) {
-      toast("All links already converted", {
-        description: "All aihero.dev links are already short links.",
-      });
-      return;
-    }
-
-    setIsConvertingShortLinks(true);
-    try {
-      const replacements = new Map<string, string>();
-      for (const url of convertibleUrls) {
-        const response = await fetch("/api/shortlinks/find-or-create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url,
-            description: `YouTube (${title || "Untitled"})`,
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || "Failed to create short link");
-        }
-
-        const { shortLinkUrl } = await response.json();
-        replacements.set(url, shortLinkUrl);
-      }
-
-      setDescription(replaceUrls(description, replacements));
-      toast("Links converted", {
-        description: `Converted ${convertibleUrls.length} aihero.dev URL${convertibleUrls.length > 1 ? "s" : ""} to short links.`,
-      });
-    } catch (error) {
-      console.error("Failed to convert short links:", error);
-      toast.error("Failed to convert links", {
-        description:
-          error instanceof Error ? error.message : "An error occurred",
-      });
-    } finally {
-      setIsConvertingShortLinks(false);
-    }
-  };
-
   return (
     <>
       <div className="max-w-2xl mx-auto w-full space-y-6">
@@ -313,24 +249,6 @@ export function PostPage({
             placeholder="Enter video description..."
             className="min-h-[300px] resize-y"
           />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleConvertToShortLinks}
-            disabled={isConvertingShortLinks || !description.trim()}
-          >
-            {isConvertingShortLinks ? (
-              <>
-                <Loader2Icon className="h-4 w-4 animate-spin" />
-                Converting...
-              </>
-            ) : (
-              <>
-                <LinkIcon className="h-4 w-4" />
-                Convert to short links
-              </>
-            )}
-          </Button>
         </div>
 
         {/* Thumbnail selection */}

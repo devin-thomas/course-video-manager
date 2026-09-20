@@ -12,25 +12,6 @@ import { uploadTypeRegistry } from "./upload-type-registry";
 
 export interface UploadContextType {
   uploads: uploadReducer.State["uploads"];
-  startAiHeroUpload: (
-    videoId: string,
-    title: string,
-    body: string,
-    description: string,
-    slug: string,
-    dependsOn?: string
-  ) => string;
-  startSkillsChangelogUpload: (
-    videoId: string,
-    title: string,
-    slug: string,
-    body: string,
-    description: string,
-    newsletterSubject: string,
-    newsletterPreviewText: string,
-    newsletterCopy: string,
-    dependsOn?: string
-  ) => string;
   startExportUpload: (videoId: string, title: string) => string;
   startRenderVerticalUpload: (videoId: string, title: string) => string;
   startBatchExportUpload: (
@@ -98,97 +79,6 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
   // Maps videoId → uploadId for batch exports
   const batchVideoIdToUploadIdRef = useRef<Map<string, string>>(new Map());
-
-  const startAiHeroUpload = useCallback(
-    (
-      videoId: string,
-      title: string,
-      body: string,
-      description: string,
-      slug: string,
-      dependsOn?: string
-    ) => {
-      const uploadId = generateUploadId();
-
-      const params = { body, description, slug };
-      paramsMapRef.current.set(uploadId, { type: "ai-hero", params });
-
-      const action = {
-        type: "START_UPLOAD" as const,
-        uploadId,
-        videoId,
-        title,
-        uploadType: "ai-hero" as const,
-        dependsOn,
-      };
-      dispatch(action);
-
-      if (!dependsOn) {
-        initiateFromRegistry(
-          "ai-hero",
-          action,
-          params,
-          dispatch,
-          abortControllersRef.current
-        );
-      }
-
-      return uploadId;
-    },
-    []
-  );
-
-  const startSkillsChangelogUpload = useCallback(
-    (
-      videoId: string,
-      title: string,
-      slug: string,
-      body: string,
-      description: string,
-      newsletterSubject: string,
-      newsletterPreviewText: string,
-      newsletterCopy: string,
-      dependsOn?: string
-    ) => {
-      const uploadId = generateUploadId();
-
-      const params = {
-        slug,
-        body,
-        description,
-        newsletterSubject,
-        newsletterPreviewText,
-        newsletterCopy,
-      };
-      paramsMapRef.current.set(uploadId, {
-        type: "skills-changelog",
-        params,
-      });
-
-      const action = {
-        type: "START_UPLOAD" as const,
-        uploadId,
-        videoId,
-        title,
-        uploadType: "skills-changelog" as const,
-        dependsOn,
-      };
-      dispatch(action);
-
-      if (!dependsOn) {
-        initiateFromRegistry(
-          "skills-changelog",
-          action,
-          params,
-          dispatch,
-          abortControllersRef.current
-        );
-      }
-
-      return uploadId;
-    },
-    []
-  );
 
   const startExportUpload = useCallback((videoId: string, title: string) => {
     const uploadId = generateUploadId();
@@ -466,8 +356,6 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     <UploadContext.Provider
       value={{
         uploads: state.uploads,
-        startAiHeroUpload,
-        startSkillsChangelogUpload,
         startExportUpload,
         startRenderVerticalUpload,
         startBatchExportUpload,

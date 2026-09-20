@@ -11,16 +11,18 @@ const createState = (
   ...overrides,
 });
 
-const createAiHeroEntry = (
-  overrides: Partial<Omit<uploadReducer.AiHeroUploadEntry, "uploadType">> = {}
-): uploadReducer.AiHeroUploadEntry => ({
+const createRenderVerticalEntry = (
+  overrides: Partial<
+    Omit<uploadReducer.RenderVerticalUploadEntry, "uploadType">
+  > = {}
+): uploadReducer.RenderVerticalUploadEntry => ({
   uploadId: "upload-1",
   videoId: "video-1",
   title: "Test Video",
   progress: 0,
   status: "uploading",
-  uploadType: "ai-hero",
-  aiHeroSlug: null,
+  uploadType: "render-vertical",
+  renderVerticalStage: null,
   errorMessage: null,
   retryCount: 0,
   terminal: false,
@@ -148,7 +150,7 @@ describe("UPDATE_EXPORT_STAGE", () => {
 
   it("should not modify state for non-export upload", () => {
     const initial = createState({
-      uploads: { "upload-1": createAiHeroEntry() },
+      uploads: { "upload-1": createRenderVerticalEntry() },
     });
     const state = reduce(initial, {
       type: "UPDATE_EXPORT_STAGE",
@@ -246,7 +248,7 @@ describe("UPDATE_EXPORT_PROGRESS", () => {
 
   it("should not modify state for non-export upload", () => {
     const initial = createState({
-      uploads: { "upload-1": createAiHeroEntry() },
+      uploads: { "upload-1": createRenderVerticalEntry() },
     });
     const state = reduce(initial, {
       type: "UPDATE_EXPORT_PROGRESS",
@@ -358,7 +360,7 @@ describe("UPDATE_PUBLISH_STAGE", () => {
 
   it("should not modify state for non-publish upload", () => {
     const initial = createState({
-      uploads: { "upload-1": createAiHeroEntry() },
+      uploads: { "upload-1": createRenderVerticalEntry() },
     });
     const state = reduce(initial, {
       type: "UPDATE_PUBLISH_STAGE",
@@ -402,7 +404,7 @@ describe("PUBLISH_COMPLETE", () => {
 
   it("should not modify state for non-publish upload", () => {
     const initial = createState({
-      uploads: { "upload-1": createAiHeroEntry() },
+      uploads: { "upload-1": createRenderVerticalEntry() },
     });
     const state = reduce(initial, {
       type: "PUBLISH_COMPLETE",

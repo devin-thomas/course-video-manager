@@ -77,17 +77,29 @@ This registers the `0000` baseline migration as already-applied so the next `pnp
 | `pnpm db:baseline` | Mark the `0000` baseline as applied (one-time setup)          |
 | `pnpm db:studio`   | Open Drizzle Studio                                           |
 
-## Not in this fork: YouTube and Buffer posting
+## Not in this fork: the publishing integrations
 
-Upstream uploads finished videos to YouTube and posts vertical Shorts to
-Buffer (by way of S3, and a Make or Zapier scenario). Both integrations are
-removed here: this fork publishes Course bundles to Google Drive and nothing
-else, so it needs no YouTube or Buffer API credentials.
+Upstream posts finished work to several places: YouTube, Buffer (for vertical
+Shorts), AI Hero (`aihero.dev` articles and Skills Changelog entries, which in
+turn draft a Kit newsletter). All of it is removed here. Each one targets a
+platform this fork has no account or API key for, and AI Hero in particular
+expects a specific backend — device-code OAuth, S3 multipart uploads,
+`/api/posts`, `/api/skills/changelog` — that only aihero.dev implements.
 
-What is kept: the Post tab still drafts a title, description and thumbnail
-(including the AI generators for them), the Shorts editor still records,
-edits, exports and renders vertical video, and the AI Hero, newsletter and
-skills-changelog posting paths are untouched.
+This fork does one job: edit lessons, and publish Course bundles to Google
+Drive.
 
-The `youtube_auth` table is still in the schema, unused. Migrations here are
-additive-only, so dropping it is a separate two-step change.
+What is kept: the **Details** tab still drafts a title, description and
+thumbnail (with the AI generators for each); the **X / LinkedIn** tab still
+drafts a social caption and opens the site to paste it into; the article
+writer keeps all its writing modes, including its newsletter document mode;
+the Shorts editor still records, edits, exports and renders vertical video.
+
+The `youtube_auth` and `ai_hero_auth` tables are still in the schema, unused.
+Migrations here are additive-only, so dropping them is a separate two-step
+change.
+
+Getting published lessons onto a website is deliberately left open. A Publish
+writes a Drive folder per course holding the videos and a `course.json`
+manifest describing them, which a site can read; nothing pushes into a
+platform API.

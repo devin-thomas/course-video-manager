@@ -368,6 +368,11 @@ _Avoid_: Checkpoint, Commit list, **Course Version** `commitState` (Dropbox publ
 
 ### Video destinations
 
+> **Removed in this fork.** The YouTube, Buffer and AI Hero destinations
+> (including the Skills Changelog and its Kit newsletter) are gone; a Video's
+> only destination is the Course bundle a Publish writes to Google Drive. The
+> entries below describe upstream and are kept for reading its code and ADRs.
+
 **Skills Changelog**:
 A published AI Hero entity bundling an article and a Kit newsletter draft for one **Video**. Created via `POST /api/skills/changelog`; publishes immediately and triggers Inngest `skill-changelog/published`, which creates a Kit newsletter draft (template `5176054`, from `matt@aihero.dev`) — drafts only, never sends. Newsletter required; article + newsletter authored on one page. Public at `https://www.aihero.dev/skills/<slug>`, with a footer linking back.
 _Avoid_: Changelog (ambiguous with course publish changelog), Skill post, Changelog entry

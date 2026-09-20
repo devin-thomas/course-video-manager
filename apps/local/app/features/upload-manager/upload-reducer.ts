@@ -19,12 +19,7 @@ export namespace uploadReducer {
   export type UploadStatus =
     "waiting" | "uploading" | "retrying" | "success" | "error";
   export type UploadType =
-    | "ai-hero"
-    | "skills-changelog"
-    | "export"
-    | "publish"
-    | "autofill"
-    | "render-vertical";
+    "export" | "publish" | "autofill" | "render-vertical";
   // Every stage union below is the SERVICE's own union, never a restatement of
   // it. The bands and the labels are total `Record`s over these types, so a
   // stage the server emits and the client has no band for is a compile error
@@ -61,16 +56,6 @@ export namespace uploadReducer {
     // children render nested under their parent, are dismissed with it, and
     // can be aggregated into its progress.
     parentUploadId: string | null;
-  }
-
-  export interface AiHeroUploadEntry extends BaseUploadEntry {
-    uploadType: "ai-hero";
-    aiHeroSlug: string | null;
-  }
-
-  export interface SkillsChangelogUploadEntry extends BaseUploadEntry {
-    uploadType: "skills-changelog";
-    skillsChangelogSlug: string | null;
   }
 
   export interface ExportUploadEntry extends BaseUploadEntry {
@@ -113,8 +98,6 @@ export namespace uploadReducer {
   }
 
   export type UploadEntry =
-    | AiHeroUploadEntry
-    | SkillsChangelogUploadEntry
     | ExportUploadEntry
     | PublishUploadEntry
     | AutofillUploadEntry
@@ -154,8 +137,6 @@ export namespace uploadReducer {
     | {
         type: "UPLOAD_SUCCESS";
         uploadId: string;
-        aiHeroSlug?: string;
-        skillsChangelogSlug?: string;
       }
     | { type: "UPLOAD_ERROR"; uploadId: string; errorMessage: string }
     | { type: "UPLOAD_FATAL_ERROR"; uploadId: string; errorMessage: string }

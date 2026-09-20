@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2Icon, SparklesIcon, CopyIcon, LinkIcon } from "lucide-react";
+import { Loader2Icon, SparklesIcon, CopyIcon } from "lucide-react";
 import type { SectionWithWordCount } from "@/features/article-writer/types";
 import type { CourseStructure } from "@/components/video-context-panel";
 
@@ -115,56 +115,6 @@ export const SocialPagePanel = (props: SocialPagePanelProps) => {
     setPendingGeneratedCaption("");
   };
 
-  // Read the video title from localStorage (set by the YouTube tab)
-  const [videoTitle, setVideoTitle] = useState("");
-  useEffect(() => {
-    if (typeof localStorage !== "undefined") {
-      setVideoTitle(
-        localStorage.getItem(`post-title-${videoId}`) || "Untitled"
-      );
-    }
-  }, [videoId]);
-
-  // Short link creation state
-  const [creatingShortLink, setCreatingShortLink] = useState<string | null>(
-    null
-  );
-
-  const handleCreateShortLink = async (
-    platform: "Newsletter" | "X" | "LinkedIn"
-  ) => {
-    setCreatingShortLink(platform);
-    try {
-      const response = await fetch("/api/shortlinks/find-or-create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: "https://aihero.dev/skills/subscribe",
-          description: `${platform} (${videoTitle})`,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create short link");
-      }
-
-      const { shortLinkUrl } = await response.json();
-      await navigator.clipboard.writeText(shortLinkUrl);
-      toast("Short link copied", {
-        description: `${platform} short link copied to clipboard: ${shortLinkUrl}`,
-      });
-    } catch (error) {
-      console.error("Failed to create short link:", error);
-      toast.error("Failed to create short link", {
-        description:
-          error instanceof Error ? error.message : "An error occurred",
-      });
-    } finally {
-      setCreatingShortLink(null);
-    }
-  };
-
   const copyAndNavigate = async (url: string, platform: string) => {
     if (!socialCaption.trim()) return;
     await navigator.clipboard.writeText(socialCaption);
@@ -256,44 +206,6 @@ export const SocialPagePanel = (props: SocialPagePanelProps) => {
               </p>
             </div>
           )}
-
-          {/* Short link buttons */}
-          <div className="space-y-3 pt-2 border-t border-border">
-            <Label>Short Links</Label>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => handleCreateShortLink("X")}
-                disabled={creatingShortLink !== null}
-              >
-                {creatingShortLink === "X" ? (
-                  <Loader2Icon className="h-4 w-4 animate-spin" />
-                ) : (
-                  <LinkIcon className="h-4 w-4" />
-                )}
-                X
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => handleCreateShortLink("LinkedIn")}
-                disabled={creatingShortLink !== null}
-              >
-                {creatingShortLink === "LinkedIn" ? (
-                  <Loader2Icon className="h-4 w-4 animate-spin" />
-                ) : (
-                  <LinkIcon className="h-4 w-4" />
-                )}
-                LinkedIn
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground text-center">
-              Creates a tracked short link and copies it to clipboard.
-            </p>
-          </div>
         </div>
       </div>
 

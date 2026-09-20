@@ -75,8 +75,8 @@ describe("UploadRow progress indicator", () => {
     const html = render({
       ...base,
       progress: 63,
-      uploadType: "ai-hero",
-      aiHeroSlug: null,
+      uploadType: "render-vertical",
+      renderVerticalStage: null,
     });
 
     expect(bars(html)).toEqual([63]);
@@ -87,8 +87,8 @@ describe("UploadRow progress indicator", () => {
     const html = render({
       ...base,
       status: "waiting",
-      uploadType: "ai-hero",
-      aiHeroSlug: null,
+      uploadType: "render-vertical",
+      renderVerticalStage: null,
       dependsOn: "u0",
       parentUploadId: null,
     });
@@ -150,17 +150,18 @@ describe("UploadRow progress indicator", () => {
 });
 
 describe("UploadRow success state", () => {
-  it("names the destination for a job type that has one", () => {
+  it("names the outcome for a job type that has one", () => {
     const html = render({
       ...base,
       progress: 100,
       status: "success",
-      uploadType: "ai-hero",
-      aiHeroSlug: "my-post",
+      uploadType: "publish",
+      publishStage: null,
+      newDraftVersionId: null,
+      courseId: "course-1",
     });
 
-    expect(html).toContain("Posted to AI Hero");
-    expect(html).toContain("https://aihero.dev/my-post");
+    expect(html).toContain("Published");
   });
 
   it("falls back to Complete for a job type with no destination of its own", () => {

@@ -24,9 +24,9 @@ const makeExportEntry = (
   ...overrides,
 });
 
-const makeAiHeroEntry = (
-  overrides: Partial<uploadReducer.AiHeroUploadEntry> = {}
-): uploadReducer.AiHeroUploadEntry => ({
+const makeRenderVerticalEntry = (
+  overrides: Partial<uploadReducer.RenderVerticalUploadEntry> = {}
+): uploadReducer.RenderVerticalUploadEntry => ({
   uploadId: "post-1",
   videoId: "video-1",
   title: "Test Video",
@@ -37,8 +37,8 @@ const makeAiHeroEntry = (
   terminal: false,
   dependsOn: null,
   parentUploadId: null,
-  uploadType: "ai-hero",
-  aiHeroSlug: null,
+  uploadType: "render-vertical",
+  renderVerticalStage: null,
   ...overrides,
 });
 
@@ -96,14 +96,14 @@ describe("hasActiveExportUploads", () => {
 
   it("ignores non-export upload types", () => {
     const uploads: Record<string, uploadReducer.UploadEntry> = {
-      "post-1": makeAiHeroEntry({ status: "uploading" }),
+      "post-1": makeRenderVerticalEntry({ status: "uploading" }),
     };
     expect(hasActiveExportUploads(uploads)).toBe(false);
   });
 
   it("detects active exports among mixed upload types", () => {
     const uploads: Record<string, uploadReducer.UploadEntry> = {
-      "post-1": makeAiHeroEntry({ status: "success" }),
+      "post-1": makeRenderVerticalEntry({ status: "success" }),
       "upload-1": makeExportEntry({ status: "uploading" }),
     };
     expect(hasActiveExportUploads(uploads)).toBe(true);

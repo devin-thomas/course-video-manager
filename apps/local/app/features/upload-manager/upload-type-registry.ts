@@ -1,10 +1,8 @@
 import type { uploadReducer } from "./upload-reducer";
 import { autofillConfig } from "./upload-type-autofill";
-import { startSSEAiHeroPost } from "./sse-ai-hero-client";
 import { startSSEExport } from "./sse-export-client";
 import { startSSEPublish } from "./sse-publish-client";
 import { startSSERenderVertical } from "./sse-render-vertical-client";
-import { startSSESkillsChangelogPost } from "./sse-skills-changelog-client";
 
 type StartUploadAction = Extract<
   uploadReducer.Action,
@@ -123,152 +121,6 @@ const exportConfig: UploadTypeConfig<
   },
 
   supportsDependsOn: false,
-};
-
-export interface AiHeroParams {
-  body: string;
-  description: string;
-  slug: string;
-}
-
-const aiHeroConfig: UploadTypeConfig<
-  AiHeroParams,
-  uploadReducer.AiHeroUploadEntry
-> = {
-  createEntry: (base) => ({
-    ...base,
-    uploadType: "ai-hero" as const,
-    aiHeroSlug: null,
-  }),
-
-  resetEntry: (base) => ({
-    ...base,
-    uploadType: "ai-hero" as const,
-    aiHeroSlug: null,
-  }),
-
-  applySuccess: (entry, action) => ({
-    ...entry,
-    status: "success" as const,
-    progress: 100,
-    errorMessage: null,
-    aiHeroSlug: action.aiHeroSlug ?? null,
-  }),
-
-  initiate: (uploadId, entry, params, dispatch, abortControllers) => {
-    withAbortManagement(uploadId, abortControllers, () =>
-      startSSEAiHeroPost(
-        {
-          videoId: entry.videoId,
-          title: entry.title,
-          body: params.body,
-          description: params.description,
-          slug: params.slug,
-        },
-        {
-          onProgress: (percentage) => {
-            dispatch({
-              type: "UPDATE_PROGRESS",
-              uploadId,
-              progress: percentage,
-            });
-          },
-          onComplete: (aiHeroSlug) => {
-            dispatch({ type: "UPLOAD_SUCCESS", uploadId, aiHeroSlug });
-            abortControllers.delete(uploadId);
-          },
-          onError: (message) => {
-            dispatch({
-              type: "UPLOAD_ERROR",
-              uploadId,
-              errorMessage: message,
-            });
-            abortControllers.delete(uploadId);
-          },
-        }
-      )
-    );
-  },
-
-  supportsDependsOn: true,
-};
-
-export interface SkillsChangelogParams {
-  slug: string;
-  body: string;
-  description: string;
-  newsletterSubject: string;
-  newsletterPreviewText: string;
-  newsletterCopy: string;
-}
-
-const skillsChangelogConfig: UploadTypeConfig<
-  SkillsChangelogParams,
-  uploadReducer.SkillsChangelogUploadEntry
-> = {
-  createEntry: (base) => ({
-    ...base,
-    uploadType: "skills-changelog" as const,
-    skillsChangelogSlug: null,
-  }),
-
-  resetEntry: (base) => ({
-    ...base,
-    uploadType: "skills-changelog" as const,
-    skillsChangelogSlug: null,
-  }),
-
-  applySuccess: (entry, action) => ({
-    ...entry,
-    status: "success" as const,
-    progress: 100,
-    errorMessage: null,
-    skillsChangelogSlug: action.skillsChangelogSlug ?? null,
-  }),
-
-  initiate: (uploadId, entry, params, dispatch, abortControllers) => {
-    withAbortManagement(uploadId, abortControllers, () =>
-      startSSESkillsChangelogPost(
-        {
-          videoId: entry.videoId,
-          title: entry.title,
-          slug: params.slug,
-          body: params.body,
-          description: params.description,
-          newsletterSubject: params.newsletterSubject,
-          newsletterPreviewText: params.newsletterPreviewText,
-          newsletterCopy: params.newsletterCopy,
-        },
-        {
-          onProgress: (percentage) => {
-            dispatch({
-              type: "UPDATE_PROGRESS",
-              uploadId,
-              progress: percentage,
-            });
-          },
-          onComplete: (skillsChangelogSlug) => {
-            dispatch({
-              type: "UPLOAD_SUCCESS",
-              uploadId,
-              skillsChangelogSlug,
-            });
-            abortControllers.delete(uploadId);
-          },
-          onError: (message) => {
-            dispatch({
-              type: "UPLOAD_ERROR",
-              uploadId,
-              errorMessage: message,
-            });
-            abortControllers.delete(uploadId);
-          },
-        }
-      )
-    );
-  },
-
-  supportsDependsOn: true,
 };
 
 export interface PublishParams {
@@ -504,8 +356,6 @@ export const uploadTypeRegistry: Record<
   UploadTypeConfig<any, any>
 > = {
   export: exportConfig,
-  "ai-hero": aiHeroConfig,
-  "skills-changelog": skillsChangelogConfig,
   publish: publishConfig,
   autofill: autofillConfig,
   "render-vertical": renderVerticalConfig,

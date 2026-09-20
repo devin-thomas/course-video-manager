@@ -32,6 +32,7 @@ export const youtubeAuth = createTable("youtube_auth", {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+/** Unused in this fork: the AI Hero integration was removed. See youtubeAuth. */
 export const aiHeroAuth = createTable("ai_hero_auth", {
   id: varchar("id", { length: 255 })
     .notNull()

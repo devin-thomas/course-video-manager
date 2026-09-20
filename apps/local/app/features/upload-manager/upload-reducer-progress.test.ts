@@ -11,16 +11,18 @@ const createState = (
   ...overrides,
 });
 
-const createAiHeroEntry = (
-  overrides: Partial<Omit<uploadReducer.AiHeroUploadEntry, "uploadType">> = {}
-): uploadReducer.AiHeroUploadEntry => ({
+const createRenderVerticalEntry = (
+  overrides: Partial<
+    Omit<uploadReducer.RenderVerticalUploadEntry, "uploadType">
+  > = {}
+): uploadReducer.RenderVerticalUploadEntry => ({
   uploadId: "upload-1",
   videoId: "video-1",
   title: "Test Video",
   progress: 0,
   status: "uploading",
-  uploadType: "ai-hero",
-  aiHeroSlug: null,
+  uploadType: "render-vertical",
+  renderVerticalStage: null,
   errorMessage: null,
   retryCount: 0,
   terminal: false,
@@ -108,7 +110,7 @@ describe("progress never runs backwards", () => {
   });
 
   it("still streams a real percentage straight through for a plain upload", () => {
-    const seen = progressOver(createAiHeroEntry(), [
+    const seen = progressOver(createRenderVerticalEntry(), [
       { type: "UPDATE_PROGRESS", uploadId: "upload-1", progress: 37 },
       { type: "UPDATE_PROGRESS", uploadId: "upload-1", progress: 82 },
     ]);

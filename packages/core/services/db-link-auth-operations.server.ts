@@ -1,10 +1,5 @@
 import { DrizzleService, type Database } from "./drizzle-service.server.js";
-import {
-  links,
-  aiHeroAuth,
-  dropboxAuth,
-  googleDriveAuth,
-} from "../db/schema.js";
+import { links, dropboxAuth, googleDriveAuth } from "../db/schema.js";
 import { NotFoundError, UnknownDBServiceError } from "./db-service-errors.js";
 import { desc, eq } from "drizzle-orm";
 import { Effect } from "effect";
@@ -53,41 +48,6 @@ export const createLinkAuthOperations = (db: Database) => {
 
   const deleteLink = Effect.fn("deleteLink")(function* (linkId: string) {
     yield* makeDbCall(() => db.delete(links).where(eq(links.id, linkId)));
-    return { success: true };
-  });
-
-  const getAiHeroAuth = Effect.fn("getAiHeroAuth")(function* () {
-    const auth = yield* makeDbCall(() => db.query.aiHeroAuth.findFirst());
-    return auth ?? null;
-  });
-
-  const upsertAiHeroAuth = Effect.fn("upsertAiHeroAuth")(function* (params: {
-    accessToken: string;
-    userId: string;
-  }) {
-    yield* makeDbCall(() => db.delete(aiHeroAuth));
-
-    const [newAuth] = yield* makeDbCall(() =>
-      db
-        .insert(aiHeroAuth)
-        .values({
-          accessToken: params.accessToken,
-          userId: params.userId,
-        })
-        .returning()
-    );
-
-    if (!newAuth) {
-      return yield* new UnknownDBServiceError({
-        cause: "No AI Hero auth was returned from the database",
-      });
-    }
-
-    return newAuth;
-  });
-
-  const deleteAiHeroAuth = Effect.fn("deleteAiHeroAuth")(function* () {
-    yield* makeDbCall(() => db.delete(aiHeroAuth));
     return { success: true };
   });
 
@@ -247,9 +207,6 @@ export const createLinkAuthOperations = (db: Database) => {
     getLinks,
     createLink,
     deleteLink,
-    getAiHeroAuth,
-    upsertAiHeroAuth,
-    deleteAiHeroAuth,
     getDropboxAuth,
     upsertDropboxAuth,
     updateDropboxAccessToken,

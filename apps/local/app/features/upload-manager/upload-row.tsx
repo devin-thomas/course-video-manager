@@ -4,7 +4,6 @@ import {
   RefreshCw,
   Upload,
   X,
-  ExternalLink,
   Cloud,
   Send,
   Film,
@@ -179,17 +178,6 @@ function SuccessDetail({ upload }: { upload: uploadReducer.UploadEntry }) {
       );
     case "publish":
       return <SuccessBadge label="Published" />;
-    case "ai-hero":
-      return (
-        <SuccessBadge label="Posted to AI Hero">
-          {upload.aiHeroSlug && (
-            <SuccessLink href={`https://aihero.dev/${upload.aiHeroSlug}`}>
-              View Post
-            </SuccessLink>
-          )}
-        </SuccessBadge>
-      );
-    case "skills-changelog":
     case "render-vertical":
       return <SuccessBadge label="Complete" />;
   }
@@ -212,26 +200,5 @@ function SuccessBadge({
       </Badge>
       {children}
     </div>
-  );
-}
-
-function SuccessLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {children}
-      <ExternalLink className="size-3" />
-    </a>
   );
 }

@@ -59,7 +59,7 @@ describe("retry effect integration", () => {
     >();
 
     paramsMap.set("upload-1", {
-      type: "ai-hero",
+      type: "render-vertical",
       params: { body: "b", description: "My desc", slug: "post-1" },
     });
 
@@ -70,8 +70,8 @@ describe("retry effect integration", () => {
         title: "Test Video",
         progress: 50,
         status: "uploading",
-        uploadType: "ai-hero",
-        aiHeroSlug: null,
+        uploadType: "render-vertical",
+        renderVerticalStage: null,
         errorMessage: null,
         retryCount: 0,
         terminal: false,
@@ -105,7 +105,7 @@ describe("retry effect integration", () => {
       entry: uploadReducer.UploadEntry;
     }> = [
       {
-        uploadType: "ai-hero",
+        uploadType: "render-vertical",
         params: {
           description: "desc",
           privacyStatus: "public",
@@ -117,8 +117,8 @@ describe("retry effect integration", () => {
           title: "Test",
           progress: 30,
           status: "retrying" as const,
-          uploadType: "ai-hero" as const,
-          aiHeroSlug: null,
+          uploadType: "render-vertical" as const,
+          renderVerticalStage: null,
           errorMessage: "err",
           retryCount: 1,
           terminal: false,
@@ -127,7 +127,7 @@ describe("retry effect integration", () => {
         },
       },
       {
-        uploadType: "skills-changelog",
+        uploadType: "publish",
         params: { caption: "hello" },
         entry: {
           uploadId: "u2",
@@ -135,8 +135,10 @@ describe("retry effect integration", () => {
           title: "Test",
           progress: 30,
           status: "retrying" as const,
-          uploadType: "skills-changelog" as const,
-          skillsChangelogSlug: null,
+          uploadType: "publish" as const,
+          publishStage: null,
+          newDraftVersionId: null,
+          courseId: "course-1",
           errorMessage: "err",
           retryCount: 1,
           terminal: false,
@@ -145,7 +147,7 @@ describe("retry effect integration", () => {
         },
       },
       {
-        uploadType: "ai-hero",
+        uploadType: "render-vertical",
         params: { body: "content", description: "desc", slug: "slug" },
         entry: {
           uploadId: "u3",
@@ -153,8 +155,8 @@ describe("retry effect integration", () => {
           title: "Test",
           progress: 30,
           status: "retrying" as const,
-          uploadType: "ai-hero" as const,
-          aiHeroSlug: null,
+          uploadType: "render-vertical" as const,
+          renderVerticalStage: null,
           errorMessage: "err",
           retryCount: 1,
           terminal: false,
@@ -220,7 +222,7 @@ describe("dependency activation integration", () => {
     >();
 
     paramsMap.set("yt-1", {
-      type: "ai-hero",
+      type: "render-vertical",
       params: { body: "b", description: "desc", slug: "post-1" },
     });
 
@@ -234,7 +236,7 @@ describe("dependency activation integration", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
-      uploadType: "ai-hero",
+      uploadType: "render-vertical",
       uploadId: "yt-1",
       videoId: "video-1",
       title: "AI Hero",
@@ -266,7 +268,7 @@ describe("dependency activation integration", () => {
     >();
 
     paramsMap.set("yt-1", {
-      type: "ai-hero",
+      type: "render-vertical",
       params: { body: "b", description: "desc", slug: "post-1" },
     });
 
@@ -280,7 +282,7 @@ describe("dependency activation integration", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
-      uploadType: "ai-hero",
+      uploadType: "render-vertical",
       uploadId: "yt-1",
       videoId: "video-1",
       title: "AI Hero",
@@ -328,7 +330,7 @@ describe("dependency activation integration", () => {
       description: "desc",
       slug: "my-article",
     };
-    paramsMap.set("ah-1", { type: "ai-hero", params: aiHeroParams });
+    paramsMap.set("ah-1", { type: "render-vertical", params: aiHeroParams });
 
     let state = createState();
     state = reduce(state, {
@@ -343,7 +345,7 @@ describe("dependency activation integration", () => {
       uploadId: "ah-1",
       videoId: "video-1",
       title: "AI Hero",
-      uploadType: "ai-hero",
+      uploadType: "render-vertical",
       dependsOn: "export-1",
     });
 
@@ -412,8 +414,8 @@ describe("export retry with no stored params", () => {
 describe("registry completeness", () => {
   it("should have an entry for every upload type", () => {
     const allTypes: uploadReducer.UploadType[] = [
-      "ai-hero",
-      "skills-changelog",
+      "render-vertical",
+      "publish",
       "export",
       "publish",
     ];
@@ -438,11 +440,11 @@ describe("full integration: reducer + registry through lifecycle", () => {
       uploadId: "upload-1",
       videoId: "video-1",
       title: "My Upload",
-      uploadType: "skills-changelog",
+      uploadType: "publish",
     });
 
     const started = state.uploads["upload-1"]!;
-    expect(started.uploadType).toBe("skills-changelog");
+    expect(started.uploadType).toBe("publish");
     expect(started.status).toBe("uploading");
 
     state = reduce(state, {
@@ -464,9 +466,7 @@ describe("full integration: reducer + registry through lifecycle", () => {
     });
     const success = state.uploads["upload-1"]!;
     expect(success.status).toBe("success");
-    expect(
-      success.uploadType === "skills-changelog" && success.skillsChangelogSlug
-    ).toBeNull();
+    expect(success.uploadType).toBe("publish");
   });
 
   it("should handle dependency chain: export → post with type-specific fields via registry", () => {
@@ -481,7 +481,7 @@ describe("full integration: reducer + registry through lifecycle", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
-      uploadType: "ai-hero",
+      uploadType: "render-vertical",
       uploadId: "yt-1",
       videoId: "video-1",
       title: "AI Hero Post",
@@ -495,7 +495,7 @@ describe("full integration: reducer + registry through lifecycle", () => {
 
     const ytEntry = state.uploads["yt-1"]!;
     expect(ytEntry.status).toBe("waiting");
-    expect(ytEntry.uploadType).toBe("ai-hero");
+    expect(ytEntry.uploadType).toBe("render-vertical");
 
     state = reduce(state, {
       type: "UPDATE_EXPORT_STAGE",
@@ -513,14 +513,11 @@ describe("full integration: reducer + registry through lifecycle", () => {
     state = reduce(state, {
       type: "UPLOAD_SUCCESS",
       uploadId: "yt-1",
-      aiHeroSlug: "post-xyz",
     });
 
     const ytSuccess = state.uploads["yt-1"]!;
     expect(ytSuccess.status).toBe("success");
-    expect(ytSuccess.uploadType === "ai-hero" && ytSuccess.aiHeroSlug).toBe(
-      "post-xyz"
-    );
+    expect(ytSuccess.uploadType).toBe("render-vertical");
   });
 
   it("should handle publish lifecycle: stages → complete → success preserves newDraftVersionId", () => {
