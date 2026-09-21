@@ -68,7 +68,7 @@ export function ActionsDropdown({
                 <div className="flex flex-col">
                   <span className="font-medium">Publish</span>
                   <span className="text-xs text-muted-foreground">
-                    Review changes and publish to Dropbox
+                    Review changes and publish to Google Drive
                   </span>
                 </div>
               </Link>

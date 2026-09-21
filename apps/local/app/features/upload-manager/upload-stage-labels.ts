@@ -11,13 +11,13 @@ const VIDEO_UPLOAD_STAGE_LABELS: Record<
   string
 > = {
   "queued-for-upload": "Waiting to upload",
-  uploading: "Uploading to Dropbox",
+  uploading: "Uploading to Google Drive",
 };
 
 const PUBLISH_STAGE_LABELS: Record<uploadReducer.PublishStage, string> = {
   validating: "Validating",
   exporting: "Exporting videos",
-  uploading: "Uploading to Dropbox",
+  uploading: "Uploading to Google Drive",
   freezing: "Freezing version",
   cloning: "Creating new draft",
   complete: "Finishing up",

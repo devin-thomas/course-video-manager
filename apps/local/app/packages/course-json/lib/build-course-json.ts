@@ -9,7 +9,7 @@ import {
   computeLessonWarnings,
   deriveVideoRole,
 } from "@/services/lesson-warnings";
-import { buildChapters } from "@/services/publish-to-dropbox";
+import { buildChapters } from "@/services/course-publish-chapters";
 
 // ── Schema ──────────────────────────────────────────────────────────────
 
@@ -157,7 +157,7 @@ export const CourseJsonDocumentSchema = Schema.Struct({
   }),
   archiveTTL: Schema.Literal("90d").annotations({
     description:
-      "Retention window for this immutable Course Version bundle, starting when the manifest is written to Dropbox. After this duration Course Builder may remove the bundle.",
+      "Retention window for this immutable Course Version bundle, starting when the manifest is written to Google Drive. After this duration Course Builder may remove the bundle.",
   }),
   courseName: Schema.String.annotations({
     description: "Human-readable name of the course.",

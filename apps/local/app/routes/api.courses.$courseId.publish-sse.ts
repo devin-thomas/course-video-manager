@@ -6,7 +6,7 @@ import type { PublishDetailEvent } from "@/services/course-publish-export-events
 import { createSSEResponse } from "@/lib/create-sse-response.server";
 
 // The per-video export events (batchExport's `videos`/`stage`/`complete`/
-// `error` payloads, unchanged) and the Dropbox commit's `progress` percentage
+// `error` payloads, unchanged) and the Commit's `progress` percentage
 // ride on their own wire names so the publish-level `progress` ({stage}),
 // `complete`, and `error` events stay exactly as before. `satisfies` keeps the
 // map exhaustive: a new detail event without a wire name is a compile error.
@@ -98,7 +98,7 @@ export const action = async (args: Route.ActionArgs) => {
           const message =
             e.reason === "missing_assets"
               ? `Publish discarded: ${missing.length} video file(s) were missing from the export directory (${missing.join(", ")}). Nothing was lost — your edits are safe in the Draft. Re-export and publish again`
-              : "Publish discarded: the Dropbox commit failed (after one retry). Nothing was lost — your edits are safe in the Draft. Publish again when Dropbox is reachable";
+              : "Publish discarded: the upload to Google Drive failed (after one retry). Nothing was lost — your edits are safe in the Draft. Publish again when Google Drive is reachable";
           sendEvent("error", {
             message,
             missingVideoIds: missing,

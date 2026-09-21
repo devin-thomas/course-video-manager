@@ -11,9 +11,11 @@ import {
   type TestDb,
 } from "@/test-utils/pglite";
 import {
-  createFakeDropbox,
-  FAKE_ACCESS_TOKEN,
-} from "@/test-utils/fake-dropbox";
+  createFakeGoogleDrive,
+  FAKE_COURSES_FOLDER_ID,
+  FAKE_DRIVE_ACCESS_TOKEN,
+  isVideoUploadStart,
+} from "@/test-utils/fake-google-drive";
 import { CourseOperationsService } from "@/services/db-course-operations.server";
 import { VideoOperationsService } from "@/services/db-video-operations.server";
 import { VersionOperationsService } from "@/services/db-version-operations.server";
@@ -30,7 +32,7 @@ import {
 import {
   clips as clipsTable,
   videos as videosTable,
-  dropboxAuth,
+  googleDriveAuth,
 } from "@/db/schema";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
@@ -41,26 +43,27 @@ import {
 
 let testDb: TestDb;
 let finishedVideosDir: string;
-let fakeDropbox: ReturnType<typeof createFakeDropbox>;
+let fakeDrive: ReturnType<typeof createFakeGoogleDrive>;
 
 beforeAll(async () => {
   const result = await createTestDb();
   testDb = result.testDb;
 });
 
-const DROPBOX_REMOTE_PATH = "/Courses";
+/** The Course folder the fake Drive's paths start with. */
+const COURSE_DIR = "test-course";
 
 const setupSync = async () => {
   await truncateAllTables(testDb);
 
-  fakeDropbox = createFakeDropbox();
-  fakeDropbox.install();
+  fakeDrive = createFakeGoogleDrive();
+  fakeDrive.install();
 
   finishedVideosDir = fs.mkdtempSync(path.join(tmpdir(), "sync-test-videos-"));
 
-  // Seed Dropbox auth so the transport can get an access token.
-  await testDb.insert(dropboxAuth).values({
-    accessToken: FAKE_ACCESS_TOKEN,
+  // Seed Google Drive auth so the transport can get an access token.
+  await testDb.insert(googleDriveAuth).values({
+    accessToken: FAKE_DRIVE_ACCESS_TOKEN,
     refreshToken: "fake-refresh-token",
     expiresAt: new Date(Date.now() + 3600 * 1000),
   });
@@ -215,7 +218,7 @@ const setupSync = async () => {
     ConfigProvider.fromMap(
       new Map([
         ["FINISHED_VIDEOS_DIRECTORY", finishedVideosDir],
-        ["DROPBOX_REMOTE_PATH", DROPBOX_REMOTE_PATH],
+        ["GOOGLE_DRIVE_COURSES_FOLDER_ID", FAKE_COURSES_FOLDER_ID],
       ])
     )
   );
@@ -244,14 +247,12 @@ const setupSync = async () => {
 };
 
 afterEach(() => {
-  fakeDropbox?.cleanup();
+  fakeDrive?.cleanup();
 });
 
 function getRemoteManifest(): any {
-  const stored = fakeDropbox.get(
-    `${DROPBOX_REMOTE_PATH}/test-course/course.json`
-  );
-  if (!stored) throw new Error("No course.json in fake Dropbox");
+  const stored = fakeDrive.fileAt(`${COURSE_DIR}/course.json`);
+  if (!stored) throw new Error("No course.json in fake Google Drive");
   return JSON.parse(stored.content.toString("utf-8"));
 }
 
@@ -265,21 +266,21 @@ function getManifestVideos(doc: any): Array<{ relativePath: string }> {
   );
 }
 
-describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
-  it("uploads video files to Dropbox", async () => {
+describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
+  it("uploads video files to Google Drive", async () => {
     const { course, run } = await setupSync();
 
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true);
+        yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
     const doc = getRemoteManifest();
     for (const video of getManifestVideos(doc)) {
-      const fullPath = `${DROPBOX_REMOTE_PATH}/test-course/${video.relativePath}`;
-      expect(fakeDropbox.get(fullPath)).toBeDefined();
+      const fullPath = `${COURSE_DIR}/${video.relativePath}`;
+      expect(fakeDrive.fileAt(fullPath)).toBeDefined();
     }
   });
 
@@ -289,7 +290,7 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true);
+        yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
@@ -297,43 +298,36 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     const videos = getManifestVideos(doc);
     expect(videos).toHaveLength(2);
     for (const video of videos) {
-      const fullPath = `${DROPBOX_REMOTE_PATH}/test-course/${video.relativePath}`;
-      expect(fakeDropbox.get(fullPath)).toBeDefined();
+      const fullPath = `${COURSE_DIR}/${video.relativePath}`;
+      expect(fakeDrive.fileAt(fullPath)).toBeDefined();
     }
   });
 
-  it("verifies existing bundle integrity via content_hash + size", async () => {
+  it("verifies existing bundle integrity via sha256 + size", async () => {
     const { course, run } = await setupSync();
 
     // First sync creates the bundle.
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true);
+        yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
     // Second sync verifies the existing bundle without re-uploading.
-    const callsBefore = fakeDropbox.fetchCalls.length;
+    const callsBefore = fakeDrive.calls.length;
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true);
+        yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
     // Should have made API calls for metadata/listing but no upload calls
-    // for the bundle videos (only the receipt overwrite).
-    const uploadCalls = fakeDropbox.fetchCalls
+    // for the bundle videos (only the receipt replacement).
+    const uploadCalls = fakeDrive.calls
       .slice(callsBefore)
-      .filter((c) => {
-        if (!c.url.includes("/2/files/upload") || c.url.includes("session"))
-          return false;
-        const apiArg = (c.init.headers as Record<string, string>)[
-          "Dropbox-API-Arg"
-        ];
-        return apiArg && JSON.parse(apiArg).path.includes("versions/");
-      });
+      .filter((c) => isVideoUploadStart(c.url, c.init));
     expect(uploadCalls).toHaveLength(0);
   });
 
@@ -343,26 +337,23 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true);
+        yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
     const manifestBefore = getRemoteManifest();
-    // Corrupt a video in the fake Dropbox.
+    // Corrupt a video in the fake Google Drive.
     const firstVideo = getManifestVideos(manifestBefore)[0]!;
-    const fullPath = `${DROPBOX_REMOTE_PATH}/test-course/${firstVideo.relativePath}`;
-    const stored = fakeDropbox.get(fullPath)!;
+    const fullPath = `${COURSE_DIR}/${firstVideo.relativePath}`;
+    const stored = fakeDrive.fileAt(fullPath)!;
     // Replace with same-sized but different content.
-    fakeDropbox.store(
-      stored.pathDisplay,
-      Buffer.from("x".repeat(stored.content.length))
-    );
+    fakeDrive.store(fullPath, Buffer.from("x".repeat(stored.content.length)));
 
     await expect(
       run(
         Effect.gen(function* () {
           const svc = yield* CoursePublishService;
-          yield* svc.syncToDropbox(course.id, true);
+          yield* svc.syncPublishedVersion(course.id, true);
         })
       )
     ).rejects.toBeDefined();
@@ -378,18 +369,16 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true);
+        yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
     const doc = getRemoteManifest();
-    const coursePrefix = `${DROPBOX_REMOTE_PATH}/test-course/`;
-    const prefix = coursePrefix.toLowerCase();
-    const remoteFiles = Array.from(fakeDropbox.files.keys())
-      .filter((k) => k.startsWith(prefix))
-      .map((k) =>
-        fakeDropbox.files.get(k)!.pathDisplay.slice(coursePrefix.length)
-      )
+    const coursePrefix = `${COURSE_DIR}/`;
+    const remoteFiles = fakeDrive
+      .filePaths()
+      .filter((p) => p.startsWith(coursePrefix))
+      .map((p) => p.slice(coursePrefix.length))
       .sort();
 
     const expectedFiles = [
@@ -409,7 +398,7 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true, (event, data) => {
+        yield* svc.syncPublishedVersion(course.id, true, (event, data) => {
           events.push({ event, data });
         });
       })
@@ -432,14 +421,12 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     const result = await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        return yield* svc.syncToDropbox(course.id, true);
+        return yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
     expect(result.missingVideos.length).toBeGreaterThan(0);
-    expect(
-      fakeDropbox.get(`${DROPBOX_REMOTE_PATH}/test-course/course.json`)
-    ).toBeUndefined();
+    expect(fakeDrive.fileAt(`${COURSE_DIR}/course.json`)).toBeUndefined();
   });
 
   it("emits course.json at the course root", async () => {
@@ -448,7 +435,7 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true);
+        yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
@@ -468,7 +455,7 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true);
+        yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
@@ -486,7 +473,7 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true);
+        yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
@@ -503,7 +490,7 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true);
+        yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
@@ -530,7 +517,7 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     const result = await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        return yield* svc.syncToDropbox(course.id, true);
+        return yield* svc.syncPublishedVersion(course.id, true);
       })
     );
 
@@ -548,7 +535,7 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, false);
+        yield* svc.syncPublishedVersion(course.id, false);
       })
     );
 
@@ -556,8 +543,8 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     const videos = getManifestVideos(doc);
     expect(videos).toHaveLength(1);
     expect(videos[0]!.relativePath).toContain("welcome/Problem.mp4");
-    const fullPath = `${DROPBOX_REMOTE_PATH}/test-course/${videos[0]!.relativePath}`;
-    expect(fakeDropbox.get(fullPath)).toBeDefined();
+    const fullPath = `${COURSE_DIR}/${videos[0]!.relativePath}`;
+    expect(fakeDrive.fileAt(fullPath)).toBeDefined();
     expect(videos[0]!.relativePath).not.toContain("setup");
 
     expect(doc.sections).toHaveLength(1);
@@ -571,21 +558,21 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, true);
+        yield* svc.syncPublishedVersion(course.id, true);
       })
     );
     const firstDoc = getRemoteManifest();
     const previousTodoVideo = getManifestVideos(firstDoc).find((video) =>
       video.relativePath.includes("setup")
     )!;
-    const previousTodoPath = `${DROPBOX_REMOTE_PATH}/test-course/${previousTodoVideo.relativePath}`;
-    expect(fakeDropbox.get(previousTodoPath)).toBeDefined();
+    const previousTodoPath = `${COURSE_DIR}/${previousTodoVideo.relativePath}`;
+    expect(fakeDrive.fileAt(previousTodoPath)).toBeDefined();
 
     // A later publish withholds it.
     await run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        yield* svc.syncToDropbox(course.id, false);
+        yield* svc.syncPublishedVersion(course.id, false);
       })
     );
     const secondDoc = getRemoteManifest();
@@ -594,7 +581,7 @@ describe("CoursePublishService.syncToDropbox (Dropbox HTTP API)", () => {
         video.relativePath.includes("setup")
       )
     ).toBe(false);
-    // The prior bundle's files are still in Dropbox.
-    expect(fakeDropbox.get(previousTodoPath)).toBeDefined();
+    // The prior bundle's files are still in Google Drive.
+    expect(fakeDrive.fileAt(previousTodoPath)).toBeDefined();
   });
 });

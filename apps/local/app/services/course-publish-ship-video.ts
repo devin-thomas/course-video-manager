@@ -7,7 +7,6 @@ import {
   type EmitPublishDetailEvent,
 } from "./course-publish-export-events";
 import type { ReusableSource } from "./course-publish-reuse-plan";
-import { DropboxContentHasher } from "./dropbox-content-hash";
 import type { CourseStorage, RemoteFile } from "./course-storage";
 import { readExportDigest, writeExportDigest } from "./export-sha256-sidecar";
 
@@ -36,18 +35,15 @@ const hashFileLocally = Effect.fn("hashFileLocally")(function* (
   filePath: string
 ) {
   const sha256Hash = createHash("sha256");
-  const contentHasher = new DropboxContentHasher();
   const bytes = yield* effectFs.stream(filePath).pipe(
     Stream.runFold(0, (total, chunk) => {
       sha256Hash.update(chunk);
-      contentHasher.update(chunk);
       return total + chunk.byteLength;
     })
   );
   return {
     sha256: sha256Hash.digest("hex"),
     bytes,
-    contentHash: contentHasher.digest(),
     // Bytes alone cannot say how long a file plays for. Whoever needs the
     // duration measures it; this read is not the place to shell out to ffprobe.
     durationInSeconds: null,
@@ -76,8 +72,8 @@ export function createShipVideo(deps: {
   /**
    * Offer a Video with its export on disk to the copy batch, and answer
    * whether the batch took it. A Video it took sends nothing from here: the
-   * caller issues one `copy_batch_v2` for the whole bundle once every export
-   * has landed, and marks this Video complete when its copy does.
+   * caller copies the whole batch server-side once every export has landed,
+   * and marks this Video complete when its copy does.
    */
   offerToCopyBatch: (entry: VideoEntry) => Effect.Effect<boolean>;
   videoByteSizes: Map<string, number>;
@@ -161,7 +157,7 @@ export function createShipVideo(deps: {
       yield* writeExportDigest(effectFs, entry.localPath, hashes);
     }
     if (
-      remoteFile.byteHash !== storage.byteHashOf(hashes) ||
+      remoteFile.byteHash !== hashes.sha256 ||
       remoteFile.bytes !== hashes.bytes
     ) {
       return yield* new ExportError({
@@ -184,9 +180,6 @@ export function createShipVideo(deps: {
     fileSize: number
   ) {
     const sha256Hash = createHash("sha256");
-    // Both digests are always taken, whatever the backend, so the sidecar a
-    // Publish banks stays valid if the backend is ever switched.
-    const contentHasher = new DropboxContentHasher();
     let streamedBytes = 0;
 
     const uploaded = yield* storage.uploadFromDisk({
@@ -195,7 +188,6 @@ export function createShipVideo(deps: {
       fileSize,
       onChunk: (chunk) => {
         sha256Hash.update(chunk);
-        contentHasher.update(chunk);
         streamedBytes += chunk.byteLength;
       },
       onProgress: (uploaded, total) => {
@@ -212,11 +204,10 @@ export function createShipVideo(deps: {
       },
     });
 
-    const contentHash = contentHasher.digest();
     const sha256 = sha256Hash.digest("hex");
-    if (uploaded.byteHash !== storage.byteHashOf({ sha256, contentHash })) {
+    if (uploaded.byteHash !== sha256) {
       return yield* new ExportError({
-        message: `Upload verification failed for video ${entry.videoId}: content_hash mismatch`,
+        message: `Upload verification failed for video ${entry.videoId}: sha256 mismatch`,
       });
     }
 
@@ -229,7 +220,6 @@ export function createShipVideo(deps: {
     );
     const digest = {
       sha256,
-      contentHash,
       bytes: streamedBytes,
       durationInSeconds: measured?.durationInSeconds ?? null,
     };
@@ -262,7 +252,7 @@ export function createShipVideo(deps: {
 
       // The local file is the STRONGER witness, so it is always preferred
       // where it exists: it was produced from this Video's Clips, whereas the
-      // plan can only report what Dropbox already holds. Adopting from the
+      // plan can only report what Google Drive already holds. Adopting from the
       // plan is the fallback for the case that used to have no answer at all.
       if (!onDisk && plannedSource) {
         receipt = yield* adoptFromPlan(entry, plannedSource);
@@ -280,7 +270,7 @@ export function createShipVideo(deps: {
         const fileSize = Number((yield* effectFs.stat(entry.localPath)).size);
         videoByteSizes.set(entry.videoId, fileSize);
 
-        // Dropbox may already hold these exact bytes, in which case this
+        // Google Drive may already hold these exact bytes, in which case this
         // Video's trip ends here: it is collected into the copy batch and
         // completed when that batch lands. A Video already at its own address
         // is not offered — it needs nothing at all, and is adopted below.

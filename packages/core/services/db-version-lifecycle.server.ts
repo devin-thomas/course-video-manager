@@ -42,7 +42,7 @@ export const createVersionLifecycleOps = (db: Database) => {
 
   /**
    * Promote (issue #1348): the Pending → Published transition, recorded after
-   * the Dropbox `course.json` atomic rename (the external commit receipt)
+   * the atomic `course.json` replacement (the external commit receipt)
    * lands. Acts only on a Pending row; anything else is a lifecycle bug.
    */
   const promotePendingVersion = Effect.fn("promotePendingVersion")(function* (

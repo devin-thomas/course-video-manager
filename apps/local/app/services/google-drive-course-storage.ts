@@ -34,7 +34,7 @@ const mimeTypeFor = (name: string) =>
 /**
  * The Course's Bundles as Google Drive holds them: a folder named after the
  * Course inside `GOOGLE_DRIVE_COURSES_FOLDER_ID`, and beneath it the same
- * `versions/{fp}/{section}/{lesson}/{title}.mp4` tree a Dropbox Bundle has.
+ * `versions/{fp}/{section}/{lesson}/{title}.mp4` tree every Bundle has.
  *
  * Drive addresses everything by ID and allows several items of one name in a
  * folder, so two rules keep the tree deterministic: when a name is looked up,
@@ -199,10 +199,8 @@ export const openGoogleDriveCourseStorage = Effect.fn(
     });
 
   const storage: CourseStorage = {
-    backend: "google-drive",
     location: `drive:${coursesRootId}/${courseName}`,
     uploadConcurrency: concurrency,
-    byteHashOf: (digest) => digest.sha256,
 
     listFiles: (relativeDir) =>
       Effect.gen(function* () {

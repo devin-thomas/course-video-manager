@@ -32,7 +32,7 @@ export type ReusableSource = {
  * What the previous Bundle can hand this one, indexed by Byte Hash.
  *
  * A Video is copyable when the Byte Hash of the export on THIS machine matches
- * a file Dropbox already holds. That is the only comparison that can tell a
+ * a file Google Drive already holds. That is the only comparison that can tell a
  * re-export apart from an unchanged one, because the Export Hash names what the
  * renderer was asked to do and says nothing about what it produced. Indexing by
  * bytes also means a Video can be copied from ANY identical file in the
@@ -105,7 +105,8 @@ const bundleDirOf = (relativePath: string): string | null => {
 };
 
 /**
- * Work out which Videos of this Publish already exist on Dropbox, and where.
+ * Work out which Videos of this Publish already exist in Google Drive, and
+ * where.
  *
  * The plan is drawn from the Commit receipt — the previously Published Bundle
  * — and nothing older. Reaching further back would make a Publish cost more

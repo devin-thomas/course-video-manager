@@ -29,3 +29,11 @@ export class PublishCommitFailedError extends Data.TaggedError(
 export class ExportError extends Data.TaggedError("ExportError")<{
   message: string;
 }> {}
+
+export class DoesNotExistOnDbError extends Data.TaggedError(
+  "DoesNotExistOnDbError"
+)<{
+  type: "section" | "lesson";
+  path: string;
+  message: string;
+}> {}

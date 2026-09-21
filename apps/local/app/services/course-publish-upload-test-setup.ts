@@ -1,8 +1,8 @@
 /**
- * Shared test setup for the Dropbox publish upload tests.
+ * Shared test setup for the publish upload tests.
  *
  * It builds a Course whose Videos are already exported to disk, points the
- * publish code at an in-memory Dropbox fake, and hands back the helpers that
+ * publish code at an in-memory Google Drive fake, and hands back the helpers that
  * read what landed there. The upload tests and the Bundle-reuse tests both
  * publish the same world, so they share this file rather than each building
  * their own.
@@ -22,13 +22,11 @@ import {
   type TestDb,
 } from "@/test-utils/pglite";
 import {
-  createFakeDropbox,
-  FAKE_ACCESS_TOKEN,
-} from "@/test-utils/fake-dropbox";
-import {
   createFakeGoogleDrive,
   FAKE_COURSES_FOLDER_ID,
   FAKE_DRIVE_ACCESS_TOKEN,
+  isCopyRequest,
+  isVideoUploadStart,
 } from "@/test-utils/fake-google-drive";
 import { CourseOperationsService } from "@/services/db-course-operations.server";
 import { VideoOperationsService } from "@/services/db-video-operations.server";
@@ -46,7 +44,6 @@ import {
 import {
   clips as clipsTable,
   videos as videosTable,
-  dropboxAuth,
   googleDriveAuth,
 } from "@/db/schema";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -54,36 +51,25 @@ import { eq } from "drizzle-orm";
 
 let testDb: TestDb;
 let finishedVideosDir: string;
-export let fakeDropbox: ReturnType<typeof createFakeDropbox>;
 export let fakeDrive: ReturnType<typeof createFakeGoogleDrive>;
 
 /** Register the lifecycle every file that uses this setup needs. */
-export function setupDropboxUploadTests() {
+export function setupUploadTests() {
   beforeAll(async () => {
     const result = await createTestDb();
     testDb = result.testDb;
   });
 
   afterEach(() => {
-    fakeDropbox?.cleanup();
     fakeDrive?.cleanup();
   });
 }
 
-export const DROPBOX_REMOTE_PATH = "/Courses";
+/** The Course folder every path below is relative to. */
+export const COURSE_DIR = "test-course";
 
-/** Every single-shot `files/upload` call — videos, schema, manifest, receipt. */
-const isUploadRequest = (url: string) =>
-  url.includes("/2/files/upload") && !url.includes("session");
-
-/** Only the `.mp4` uploads inside a bundle. */
-export const isVideoUploadRequest = (url: string, init: RequestInit) => {
-  if (!isUploadRequest(url)) return false;
-  const arg = (init.headers as Record<string, string> | undefined)?.[
-    "Dropbox-API-Arg"
-  ];
-  return Boolean(arg && JSON.parse(arg).path.endsWith(".mp4"));
-};
+/** The start of one Video's upload: Drive's resumable session. */
+export const isVideoUploadRequest = isVideoUploadStart;
 
 /**
  * A course with `videoCount` lessons, each holding one Video whose clips —
@@ -93,40 +79,21 @@ export const isVideoUploadRequest = (url: string, init: RequestInit) => {
 export const setupUploads = async (opts?: {
   videoCount?: number;
   config?: Record<string, string>;
-  backend?: "dropbox" | "google-drive";
 }) => {
   const videoCount = opts?.videoCount ?? 6;
-  const backend = opts?.backend ?? "dropbox";
   await truncateAllTables(testDb);
 
   finishedVideosDir = fs.mkdtempSync(
     path.join(tmpdir(), "upload-test-videos-")
   );
 
-  if (backend === "google-drive") {
-    fakeDrive = createFakeGoogleDrive();
-    fakeDrive.install();
-    await testDb.insert(googleDriveAuth).values({
-      accessToken: FAKE_DRIVE_ACCESS_TOKEN,
-      refreshToken: "fake-refresh-token",
-      expiresAt: new Date(Date.now() + 3600 * 1000),
-    });
-  } else {
-    fakeDropbox = createFakeDropbox();
-    fakeDropbox.install();
-    await testDb.insert(dropboxAuth).values({
-      accessToken: FAKE_ACCESS_TOKEN,
-      refreshToken: "fake-refresh-token",
-      expiresAt: new Date(Date.now() + 3600 * 1000),
-    });
-  }
-  const backendConfig: Array<[string, string]> =
-    backend === "google-drive"
-      ? [
-          ["COURSE_STORAGE_BACKEND", "google-drive"],
-          ["GOOGLE_DRIVE_COURSES_FOLDER_ID", FAKE_COURSES_FOLDER_ID],
-        ]
-      : [["DROPBOX_REMOTE_PATH", DROPBOX_REMOTE_PATH]];
+  fakeDrive = createFakeGoogleDrive();
+  fakeDrive.install();
+  await testDb.insert(googleDriveAuth).values({
+    accessToken: FAKE_DRIVE_ACCESS_TOKEN,
+    refreshToken: "fake-refresh-token",
+    expiresAt: new Date(Date.now() + 3600 * 1000),
+  });
 
   const drizzleLayer = Layer.succeed(DrizzleService, testDb as any);
   const dbLayer = Layer.mergeAll(
@@ -239,7 +206,7 @@ export const setupUploads = async (opts?: {
   }
 
   // Cloning a fresh Draft leaves the seeded version Published, which is what
-  // `syncToDropbox` re-commits.
+  // `syncPublishedVersion` re-commits.
   await runDb(
     Effect.gen(function* () {
       const versionOps = yield* VersionOperationsService;
@@ -255,7 +222,7 @@ export const setupUploads = async (opts?: {
     ConfigProvider.fromMap(
       new Map([
         ["FINISHED_VIDEOS_DIRECTORY", finishedVideosDir],
-        ...backendConfig,
+        ["GOOGLE_DRIVE_COURSES_FOLDER_ID", FAKE_COURSES_FOLDER_ID],
         ...Object.entries(opts?.config ?? {}),
       ])
     )
@@ -297,7 +264,7 @@ export const setupUploads = async (opts?: {
     run(
       Effect.gen(function* () {
         const svc = yield* CoursePublishService;
-        return yield* svc.syncToDropbox(
+        return yield* svc.syncPublishedVersion(
           course.id,
           includeTodoLessons,
           onProgress
@@ -308,11 +275,9 @@ export const setupUploads = async (opts?: {
   return { course, version, videos, run, sync };
 };
 
+/** Every `.mp4` Drive holds, by course-relative path (`test-course/...`). */
 export const remoteBundleVideoPaths = () =>
-  Array.from(fakeDropbox.files.values())
-    .map((stored) => stored.pathDisplay)
-    .filter((remotePath) => remotePath.endsWith(".mp4"))
-    .sort();
+  fakeDrive.filePaths().filter((remotePath) => remotePath.endsWith(".mp4"));
 
 /** The `{versionFingerprint}-{assetFingerprint}` directory the bundle landed in. */
 export const remoteBundleDirs = () =>
@@ -324,12 +289,12 @@ export const remoteBundleDirs = () =>
     )
   );
 
+export const RECEIPT_PATH = `${COURSE_DIR}/course.json`;
+
+export const receipt = () => fakeDrive.fileAt(RECEIPT_PATH);
+
 export const receiptManifest = () =>
-  JSON.parse(
-    fakeDropbox
-      .get(`${DROPBOX_REMOTE_PATH}/test-course/course.json`)!
-      .content.toString("utf-8")
-  );
+  JSON.parse(receipt()!.content.toString("utf-8"));
 
 export const manifestVideos = (manifest: any): any[] =>
   manifest.sections.flatMap((section: any) =>
@@ -359,11 +324,9 @@ export const freezeLatestVersion = (
   );
 
 export const videoUploadCount = () =>
-  fakeDropbox.fetchCalls.filter((call) =>
-    isVideoUploadRequest(call.url, call.init)
-  ).length;
+  fakeDrive.calls.filter((call) => isVideoUploadRequest(call.url, call.init))
+    .length;
 
-export const copyBatchCount = () =>
-  fakeDropbox.fetchCalls.filter((call) =>
-    call.url.includes("/2/files/copy_batch_v2")
-  ).length;
+/** Server-side copies: Drive makes one `files.copy` per reused Video. */
+export const copyCount = () =>
+  fakeDrive.calls.filter((call) => isCopyRequest(call.url, call.init)).length;

@@ -15,10 +15,10 @@ import {
   exportVideoToItsAddress,
   type ExportStage,
 } from "./course-publish-export-video";
-import { DoesNotExistOnDbError } from "./publish-to-dropbox";
 import { validatePublishability as validatePublishabilityCore } from "./course-publish-readiness";
 import { findShippingVideos as findShippingVideosCore } from "./course-publish-video-roster";
 import {
+  DoesNotExistOnDbError,
   ExportError,
   PublishCommitFailedError,
   PublishValidationError,
@@ -53,13 +53,13 @@ export type VideoForExport = {
 // The manual re-sync surface only ever reports the bundle-wide upload
 // percentage — the per-Video task events belong to a Publish, which is the
 // only caller that has an export phase to interleave them with.
-type DropboxSyncProgressCallback = (
+type SyncProgressCallback = (
   event: "progress",
   data: { percentage: number }
 ) => void;
 
 const onlyBundleProgress =
-  (onProgress?: DropboxSyncProgressCallback): EmitPublishDetailEvent =>
+  (onProgress?: SyncProgressCallback): EmitPublishDetailEvent =>
   (e) => {
     if (e.event === "progress") onProgress?.("progress", e.data);
   };
@@ -72,7 +72,7 @@ export type PublishOptions = {
   // The coarse publish lifecycle stage (validating → … → complete).
   onStageChange?: (stage: PublishStage) => void;
   // Per-video export events (same names/payloads as batchExport: `videos`,
-  // `stage`, `complete`, `error` keyed by videoId) plus the Dropbox commit's
+  // `stage`, `complete`, `error` keyed by videoId) plus the Commit's
   // `progress` percentage — pure observability.
   onDetailEvent?: EmitPublishDetailEvent;
 };
@@ -86,7 +86,7 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
       const effectFs = yield* FileSystem.FileSystem;
       // CVM is a single local operator process. Serialize every Course Version
       // lifecycle mutation so publish, manual sync, and create-version cannot
-      // interleave around the database freeze and Dropbox commit marker.
+      // interleave around the database freeze and the Commit receipt.
       const courseVersionMutationSemaphore = yield* Effect.makeSemaphore(1);
       const FINISHED_VIDEOS_DIRECTORY = yield* Config.string(
         "FINISHED_VIDEOS_DIRECTORY"
@@ -218,39 +218,39 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
         }
       );
 
-      const syncToDropboxUnlocked = Effect.fn("syncToDropboxUnlocked")(
-        function* (
-          courseId: string,
-          includeTodoLessons: boolean,
-          onProgress?: DropboxSyncProgressCallback
-        ) {
-          const latestVersion =
-            yield* versionOps.getLatestCourseVersion(courseId);
-          if (!latestVersion) {
-            return yield* new DoesNotExistOnDbError({
-              type: "section",
-              path: "",
-              message: `No version found for repo ${courseId}`,
-            });
-          }
-          // The commit state is authoritative: re-sync the newest Published
-          // Version. (Previously inferred positionally as "first non-latest".)
-          const latestPublishedVersion =
-            yield* versionOps.getLatestPublishedVersion(courseId);
-          if (!latestPublishedVersion) {
-            return yield* new PublishValidationError({
-              unfrozenCourseVersionId: latestVersion.id,
-            });
-          }
-          return yield* syncFrozenCourseVersionToRemote({
-            courseId,
-            courseVersionId: latestPublishedVersion.id,
-            includeTodoLessons,
-            onDetailEvent: onlyBundleProgress(onProgress),
-            awaitVideoReady: noExportPhase,
+      const syncPublishedVersionUnlocked = Effect.fn(
+        "syncPublishedVersionUnlocked"
+      )(function* (
+        courseId: string,
+        includeTodoLessons: boolean,
+        onProgress?: SyncProgressCallback
+      ) {
+        const latestVersion =
+          yield* versionOps.getLatestCourseVersion(courseId);
+        if (!latestVersion) {
+          return yield* new DoesNotExistOnDbError({
+            type: "section",
+            path: "",
+            message: `No version found for repo ${courseId}`,
           });
         }
-      );
+        // The commit state is authoritative: re-sync the newest Published
+        // Version. (Previously inferred positionally as "first non-latest".)
+        const latestPublishedVersion =
+          yield* versionOps.getLatestPublishedVersion(courseId);
+        if (!latestPublishedVersion) {
+          return yield* new PublishValidationError({
+            unfrozenCourseVersionId: latestVersion.id,
+          });
+        }
+        return yield* syncFrozenCourseVersionToRemote({
+          courseId,
+          courseVersionId: latestPublishedVersion.id,
+          includeTodoLessons,
+          onDetailEvent: onlyBundleProgress(onProgress),
+          awaitVideoReady: noExportPhase,
+        });
+      });
 
       const publishUnlocked = Effect.fn("publishUnlocked")(function* (
         options: PublishOptions
@@ -284,7 +284,7 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
         // Submit FIRST. It is a pure database transaction with no dependency
         // on exports whatsoever, and it is what makes everything after it
         // sound: a Draft Version legally accepts Clip, Video and Section
-        // writes, and a Video's title is its path inside the Dropbox bundle —
+        // writes, and a Video's title is its path inside the Bundle —
         // so encoding or uploading from a Draft lets an edit landing mid-flight
         // invalidate work already done.
         onStageChange?.("freezing");
@@ -306,10 +306,10 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
         //
         // Every Unexported Video this walk finds is exported. No encode is
         // ever cancelled on the strength of a copy that has not happened yet:
-        // what Dropbox receives is decided by each Video's BYTES, and this
+        // what Google Drive receives is decided by each Video's BYTES, and this
         // machine has no bytes to compare until the encode has produced them.
         // The saving survives because the encode is reproducible — a Video
-        // whose bytes Dropbox already holds is still copied rather than
+        // whose bytes Drive already holds is still copied rather than
         // uploaded — so reuse now costs GPU time instead of a wrong Bundle
         // (issue #1562).
         const { unexportedVideos, shippingVideos } = yield* findShippingVideos(
@@ -405,8 +405,8 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
           )
         );
 
-        // Commit: the Dropbox commit, culminating in the atomic `course.json`
-        // rename — the external commit receipt. A caught failure is TERMINAL
+        // Commit: the upload to Google Drive, culminating in the atomic
+        // `course.json` replacement — the external commit receipt. A caught failure is TERMINAL
         // for this Pending Version (issue #1401): retry the Commit once
         // in-flight (`sync_failed` only), then auto-Discard. The sync is
         // content-addressed and idempotent, so a later re-publish re-uploads
@@ -463,7 +463,7 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
 
         // Reclaim stale exports LAST, once every byte has gone past. GC deletes
         // any Exported Video whose Export Hash is unreachable from current
-        // database state and cannot tell a file being streamed to Dropbox from
+        // database state and cannot tell a file being streamed to Google Drive from
         // an abandoned one — so it must never run while uploads are in flight.
         // It has no correctness consumers, so the critical path is not its
         // place.
@@ -480,13 +480,11 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
         };
       });
 
-      const syncFrozenVersionToDropbox = Effect.fn(
-        "syncFrozenVersionToDropbox"
-      )(function* (
+      const syncFrozenVersion = Effect.fn("syncFrozenVersion")(function* (
         courseId: string,
         courseVersionId: string,
         includeTodoLessons: boolean,
-        onProgress?: DropboxSyncProgressCallback
+        onProgress?: SyncProgressCallback
       ) {
         return yield* courseVersionMutationSemaphore.withPermits(1)(
           syncFrozenCourseVersionToRemote({
@@ -499,13 +497,13 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
         );
       });
 
-      const syncToDropbox = Effect.fn("syncToDropbox")(function* (
+      const syncPublishedVersion = Effect.fn("syncPublishedVersion")(function* (
         courseId: string,
         includeTodoLessons: boolean,
-        onProgress?: DropboxSyncProgressCallback
+        onProgress?: SyncProgressCallback
       ) {
         return yield* courseVersionMutationSemaphore.withPermits(1)(
-          syncToDropboxUnlocked(courseId, includeTodoLessons, onProgress)
+          syncPublishedVersionUnlocked(courseId, includeTodoLessons, onProgress)
         );
       });
 
@@ -533,8 +531,8 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
         isExported,
         resolveExportPath,
         validatePublishability,
-        syncFrozenVersionToDropbox,
-        syncToDropbox,
+        syncFrozenVersion,
+        syncPublishedVersion,
         publish,
         createDraftVersion,
       };

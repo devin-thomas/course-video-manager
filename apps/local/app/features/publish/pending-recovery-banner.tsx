@@ -48,8 +48,8 @@ export function PendingRecoveryBanner({
             : `Finalizing your interrupted publish of ${recoveredName}…`}
         </span>
         <p className="text-muted-foreground mt-1">
-          The last publish committed to Dropbox but was interrupted before it
-          was recorded here.{" "}
+          The last publish committed to Google Drive but was interrupted before
+          it was recorded here.{" "}
           {done ? "It is now marked Published." : "Marking it Published…"}
         </p>
       </div>
@@ -59,8 +59,8 @@ export function PendingRecoveryBanner({
   if (!recovery) return null;
 
   if (recovery.receiptState === "unreadable") {
-    // Never offer Discard on a receipt we could not read — the mount may be
-    // down while the receipt (and a committed publish) actually exists.
+    // Never offer Discard on a receipt we could not read — Drive may be
+    // unreachable while the receipt (and a committed publish) actually exists.
     return (
       <div className="mb-8 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
         <div className="flex items-center gap-2 mb-2">
@@ -70,9 +70,9 @@ export function PendingRecoveryBanner({
           </span>
         </div>
         <p className="text-sm text-muted-foreground">
-          The Dropbox commit receipt (course.json) couldn&apos;t be read, so it
-          is unknown whether that publish committed. Check the Dropbox mount and
-          reload this page.
+          The commit receipt (course.json) in Google Drive couldn&apos;t be
+          read, so it is unknown whether that publish committed. Check that
+          Google Drive is connected and reachable, then reload this page.
         </p>
       </div>
     );

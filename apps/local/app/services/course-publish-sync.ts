@@ -178,13 +178,13 @@ export const syncFrozenCourseVersionToRemote = Effect.fn(
     reusePlan.get(remoteFile.byteHash);
 
   /**
-   * Which Videos Dropbox can produce from its own storage, and the numbers the
+   * Which Videos Google Drive can produce from its own storage, and the numbers the
    * new manifest is owed for each.
    *
    * The receipt is deliberately separate from the source. The source says
    * WHERE to copy from; the receipt says WHICH BYTES the release carries, and
    * that answer always comes from the local Export Digest rather than from the
-   * previous manifest. That is what makes a re-export reach Dropbox: the bytes
+   * previous manifest. That is what makes a re-export reach Drive: the bytes
    * on disk decide, and the receipt then describes the bytes actually shipped.
    */
   const reusableByVideoId = new Map<
@@ -209,7 +209,7 @@ export const syncFrozenCourseVersionToRemote = Effect.fn(
     // at the same Export Hash, and so is not copyable.
     const local = yield* ensureExportDigest(effectFs, entry.localPath, null);
     if (!local) return false;
-    const source = reusePlan.get(storage.byteHashOf(local));
+    const source = reusePlan.get(local.sha256);
     if (!source) return false;
     reusableByVideoId.set(entry.videoId, {
       entry,
@@ -358,7 +358,7 @@ export const syncFrozenCourseVersionToRemote = Effect.fn(
       }
       if (result.file.byteHash !== shipment.source.byteHash) {
         return yield* new ExportError({
-          message: `Copy verification failed for video ${shipment.entry.videoId}: content_hash mismatch`,
+          message: `Copy verification failed for video ${shipment.entry.videoId}: sha256 mismatch`,
         });
       }
       copyReceipts.set(shipment.entry.videoId, shipment.receipt);

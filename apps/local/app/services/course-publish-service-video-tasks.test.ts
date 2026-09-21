@@ -5,8 +5,9 @@ import path from "node:path";
 import { CoursePublishService } from "@/services/course-publish-service";
 import { createControllableVideoProcessing } from "@/test-utils/fake-video-processing";
 import type { PublishDetailEvent } from "@/services/course-publish-export-events";
+import { isVideoUploadStart } from "@/test-utils/fake-google-drive";
 import {
-  fakeDropbox,
+  fakeDrive,
   finishedVideosDir,
   setupPublishServiceTests,
   setupPublishableCourse as setup,
@@ -141,16 +142,14 @@ describe("CoursePublishService — per-Video upload tasks", () => {
     const { course, videos, run } = await setup({ videoCount: 2 });
     const doomed = videos[1]!;
 
-    // Non-transient, so the Dropbox client does not retry it away.
-    fakeDropbox.failNextRequests({
+    // Non-transient, so the Drive client does not retry it away.
+    fakeDrive.failNextRequests({
       match: (url, init) =>
-        url.includes("/2/files/upload") &&
-        Boolean(
-          JSON.parse(
-            (init.headers as Record<string, string>)["Dropbox-API-Arg"] ?? "{}"
-          ).path?.endsWith(`/${doomed.relativeAssetPath}`)
-        ),
-      times: 10,
+        isVideoUploadStart(url, init) &&
+        fakeDrive
+          .uploadTargetPath(init)
+          .endsWith(`/${doomed.relativeAssetPath}`),
+      count: 10,
       status: 400,
     });
 

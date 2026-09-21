@@ -527,7 +527,7 @@ export const createVersionOperations = (db: Database) => {
         // cloning, so no write can land on the source mid-freeze.
         yield* requireDraftVersion(transaction, input.sourceVersionId);
         const result = yield* copyVersionStructureInDb(transaction, input);
-        // Manual create-version freezes its source without a Dropbox commit:
+        // Manual create-version freezes its source without a Commit:
         // the old Draft becomes an immutable `published` snapshot (that is what
         // the positional model treated every non-latest version as), and the
         // clone becomes the course's single Draft.

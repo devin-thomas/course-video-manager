@@ -17,13 +17,43 @@ type StoredItem = {
   revisions: number;
 };
 
-type Matcher = (url: URL, init: RequestInit) => boolean;
+export type DriveRequestMatcher = (url: URL, init: RequestInit) => boolean;
+type Matcher = DriveRequestMatcher;
+
+/** A request's lifetime on a logical clock, so overlap is computable. */
+type RequestSpan = { url: URL; init: RequestInit; start: number; end: number };
 
 const json = (status: number, body: unknown, headers?: HeadersInit) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", ...headers },
   });
+
+const requestMethod = (init: RequestInit) =>
+  (init.method ?? "GET").toUpperCase();
+
+/** The start of a resumable upload session — one per Video a Publish sends. */
+export const isVideoUploadStart: DriveRequestMatcher = (url, init) =>
+  requestMethod(init) === "POST" &&
+  url.pathname === "/upload/drive/v3/files" &&
+  url.searchParams.get("uploadType") === "resumable";
+
+/** A server-side `files.copy` — one per reused Video. */
+export const isCopyRequest: DriveRequestMatcher = (url, init) =>
+  requestMethod(init) === "POST" &&
+  /^\/drive\/v3\/files\/[^/]+\/copy$/.test(url.pathname);
+
+/** The in-place `files.update` that replaces `course.json` on a commit. */
+export const isReceiptReplace: DriveRequestMatcher = (url, init) =>
+  requestMethod(init) === "PATCH" &&
+  url.pathname.startsWith("/upload/drive/v3/files/") &&
+  url.searchParams.get("uploadType") === "media";
+
+/** A multipart create — a small file: schema, manifest, first receipt. */
+export const isSmallFileCreate: DriveRequestMatcher = (url, init) =>
+  requestMethod(init) === "POST" &&
+  url.pathname === "/upload/drive/v3/files" &&
+  url.searchParams.get("uploadType") === "multipart";
 
 const bodyBuffer = (init: RequestInit) => {
   const body = init.body;
@@ -45,7 +75,7 @@ export const createFakeGoogleDrive = () => {
     string,
     { name: string; parentId: string; total: number; received: Buffer[] }
   >();
-  const calls: Array<{ method: string; url: URL }> = [];
+  const calls: Array<{ method: string; url: URL; init: RequestInit }> = [];
   let counter = 0;
   const baseTime = Date.now();
   const nextId = (prefix: string) => `${prefix}-${++counter}`;
@@ -58,6 +88,74 @@ export const createFakeGoogleDrive = () => {
   }> = [];
   /** A resumable PUT that keeps only this many bytes of its chunk, once. */
   const partialAccepts: Array<{ keepBytes: number; remaining: number }> = [];
+
+  // ── In-flight instrumentation ──────────────────────────────────────
+  // Requests are timestamped on a logical clock rather than a wall clock, so
+  // peak-concurrency assertions never depend on timing.
+  const requestSpans: RequestSpan[] = [];
+  let logicalClock = 0;
+
+  /** The most matching requests that were ever in flight at once. */
+  const peakConcurrentRequests = (match: Matcher = () => true) => {
+    const events: Array<{ at: number; delta: number }> = [];
+    for (const span of requestSpans) {
+      if (!match(span.url, span.init)) continue;
+      events.push({ at: span.start, delta: 1 });
+      events.push({ at: span.end, delta: -1 });
+    }
+    events.sort((a, b) => a.at - b.at || a.delta - b.delta);
+    let current = 0;
+    let peak = 0;
+    for (const event of events) {
+      current += event.delta;
+      peak = Math.max(peak, current);
+    }
+    return peak;
+  };
+
+  // ── Deterministic concurrency barrier ──────────────────────────────
+  let barrier: {
+    count: number;
+    match: Matcher;
+    waiting: Array<() => void>;
+  } | null = null;
+
+  const releaseBarrier = () => {
+    const pending = barrier;
+    barrier = null;
+    for (const resolve of pending?.waiting ?? []) resolve();
+  };
+
+  /**
+   * Hold every matching request open until `count` of them are in flight at
+   * once, then release them all and stop holding. No timers are involved, so
+   * a caller that sends serially never trips the barrier and the test hangs
+   * to its timeout rather than passing by accident.
+   */
+  const holdUntilInFlight = (count: number, match: Matcher = () => true) => {
+    barrier = { count, match, waiting: [] };
+    return releaseBarrier;
+  };
+
+  // ── Arrival watchers ───────────────────────────────────────────────
+  const requestWatchers: Array<{ match: Matcher; resolve: () => void }> = [];
+
+  /**
+   * Resolves the moment a matching request ARRIVES — before any barrier,
+   * injected failure or dispatch — so a test can wait on "this Video started
+   * uploading" without polling or sleeping.
+   */
+  const waitForRequest = (match: Matcher = () => true) =>
+    new Promise<void>((resolve) => {
+      requestWatchers.push({ match, resolve });
+    });
+
+  const notifyWatchers = (url: URL, init: RequestInit) => {
+    for (let index = requestWatchers.length - 1; index >= 0; index--) {
+      if (!requestWatchers[index]!.match(url, init)) continue;
+      requestWatchers.splice(index, 1)[0]!.resolve();
+    }
+  };
 
   items.set(FAKE_COURSES_FOLDER_ID, {
     id: FAKE_COURSES_FOLDER_ID,
@@ -163,13 +261,8 @@ export const createFakeGoogleDrive = () => {
     return { metadata, content: partBody(parts[1]!) };
   };
 
-  const handleFetch = async (
-    input: RequestInfo | URL,
-    init: RequestInit = {}
-  ): Promise<Response> => {
-    const url = new URL(typeof input === "string" ? input : input.toString());
-    const method = (init.method ?? "GET").toUpperCase();
-    calls.push({ method, url });
+  const dispatch = async (url: URL, init: RequestInit): Promise<Response> => {
+    const method = requestMethod(init);
 
     const auth = new Headers(init.headers).get("Authorization");
     if (auth !== `Bearer ${FAKE_DRIVE_ACCESS_TOKEN}`) {
@@ -325,30 +418,129 @@ export const createFakeGoogleDrive = () => {
     throw new Error(`fake-google-drive: unhandled ${method} ${url}`);
   };
 
-  /** Every non-trashed item under the courses root, by `a/b/c` path. */
-  const tree = () => {
-    const pathOf = (item: StoredItem): string => {
-      if (item.parentId === FAKE_COURSES_FOLDER_ID) return item.name;
-      const parent = items.get(item.parentId);
-      return parent ? `${pathOf(parent)}/${item.name}` : item.name;
+  const handleFetch = async (
+    input: RequestInfo | URL,
+    init: RequestInit = {}
+  ): Promise<Response> => {
+    const url = new URL(
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url
+    );
+    calls.push({ method: requestMethod(init), url, init });
+
+    const span: RequestSpan = {
+      url,
+      init,
+      start: ++logicalClock,
+      end: Number.POSITIVE_INFINITY,
     };
-    return Array.from(items.values())
+    requestSpans.push(span);
+    notifyWatchers(url, init);
+
+    try {
+      if (barrier?.match(url, init)) {
+        const held = barrier;
+        const wait = new Promise<void>((resolve) => held.waiting.push(resolve));
+        if (held.waiting.length >= held.count) releaseBarrier();
+        await wait;
+      }
+      return await dispatch(url, init);
+    } finally {
+      span.end = ++logicalClock;
+    }
+  };
+
+  /** Every non-trashed item under the courses root, by `a/b/c` path. */
+  const pathOfItem = (item: StoredItem): string => {
+    if (item.parentId === FAKE_COURSES_FOLDER_ID) return item.name;
+    const parent = items.get(item.parentId);
+    return parent ? `${pathOfItem(parent)}/${item.name}` : item.name;
+  };
+
+  const tree = () =>
+    Array.from(items.values())
       .filter((item) => item.id !== FAKE_COURSES_FOLDER_ID && !item.trashed)
-      .map((item) => ({ path: pathOf(item), item }));
+      .map((item) => ({ path: pathOfItem(item), item }));
+
+  const liveFileAt = (path: string) =>
+    tree().find(({ path: p, item }) => p === path && item.mimeType !== FOLDER)
+      ?.item;
+
+  /** The live folder at `a/b/c` under the courses root, created if absent. */
+  const ensureFolder = (folderPath: string) => {
+    let parentId = FAKE_COURSES_FOLDER_ID;
+    for (const name of folderPath.split("/").filter(Boolean)) {
+      const existing = Array.from(items.values())
+        .filter(
+          (item) =>
+            item.parentId === parentId &&
+            item.name === name &&
+            item.mimeType === FOLDER &&
+            !item.trashed
+        )
+        .sort((a, b) => a.createdAt - b.createdAt)[0];
+      parentId = existing?.id ?? store({ name, mimeType: FOLDER, parentId }).id;
+    }
+    return parentId;
   };
 
   return {
     items,
     calls,
     tree,
+    handleFetch,
+    peakConcurrentRequests,
+    holdUntilInFlight,
+    waitForRequest,
+    /**
+     * Put bytes at a course-relative path, as a person or an earlier attempt
+     * might have: an existing file's content is replaced, otherwise the file
+     * (and any missing folder) is created.
+     */
+    store: (path: string, content: Buffer) => {
+      const existing = liveFileAt(path);
+      if (existing) {
+        existing.content = content;
+        existing.revisions++;
+        return existing;
+      }
+      const segments = path.split("/");
+      const name = segments.pop()!;
+      return store({
+        name,
+        mimeType: name.endsWith(".mp4") ? "video/mp4" : "application/json",
+        parentId: ensureFolder(segments.join("/")),
+        content,
+      });
+    },
+    /** Trash the file at a path, if there is one. */
+    remove: (path: string) => {
+      const existing = liveFileAt(path);
+      if (existing) existing.trashed = true;
+    },
+    /** Trash everything under the courses root. */
+    clear: () => {
+      for (const item of items.values()) {
+        if (item.id !== FAKE_COURSES_FOLDER_ID) item.trashed = true;
+      }
+    },
+    /** The path a resumable upload start is creating, from its metadata. */
+    uploadTargetPath: (init: RequestInit) => {
+      const metadata = JSON.parse(bodyBuffer(init).toString("utf-8"));
+      const parent = items.get(metadata.parents[0]);
+      return parent && parent.id !== FAKE_COURSES_FOLDER_ID
+        ? `${pathOfItem(parent)}/${metadata.name}`
+        : metadata.name;
+    },
     filePaths: () =>
       tree()
         .filter(({ item }) => item.mimeType !== FOLDER)
         .map(({ path }) => path)
         .sort(),
-    fileAt: (path: string) =>
-      tree().find(({ path: p, item }) => p === path && item.mimeType !== FOLDER)
-        ?.item,
+    fileAt: liveFileAt,
     folderCount: (path: string) =>
       tree().filter(
         ({ path: p, item }) => p === path && item.mimeType === FOLDER
@@ -407,6 +599,7 @@ export const createFakeGoogleDrive = () => {
       vi.stubGlobal("fetch", vi.fn(handleFetch));
     },
     cleanup: () => {
+      releaseBarrier();
       vi.restoreAllMocks();
       vi.unstubAllGlobals();
     },

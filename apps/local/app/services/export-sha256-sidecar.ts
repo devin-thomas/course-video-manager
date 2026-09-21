@@ -1,7 +1,6 @@
 import { Effect, Stream } from "effect";
 import { FileSystem } from "@effect/platform";
 import { createHash } from "node:crypto";
-import { DropboxContentHasher } from "./dropbox-content-hash";
 
 /**
  * The digest of an Exported Video, cached on disk beside the export itself.
@@ -21,8 +20,6 @@ import { DropboxContentHasher } from "./dropbox-content-hash";
 export type ExportDigest = {
   /** SHA256 of the file's bytes. Owed to the published manifest. */
   sha256: string;
-  /** Dropbox's own block-based content hash, for the immutability check. */
-  contentHash: string;
   /** Size in bytes, used to detect a sidecar that has fallen out of step. */
   bytes: number;
   /**
@@ -62,12 +59,14 @@ const parseDigest = (
   }
   if (typeof parsed !== "object" || parsed === null) return null;
 
-  const { sha256, contentHash, bytes, durationInSeconds } = parsed as Record<
+  // Sidecars written while Dropbox was a backend also carry its block
+  // `contentHash`. Nothing reads it any more; it is ignored, not an error, so
+  // those exports keep their cached digest.
+  const { sha256, bytes, durationInSeconds } = parsed as Record<
     string,
     unknown
   >;
   if (typeof sha256 !== "string" || !HEX_64.test(sha256)) return null;
-  if (typeof contentHash !== "string" || !HEX_64.test(contentHash)) return null;
   if (typeof bytes !== "number" || !Number.isInteger(bytes) || bytes < 0) {
     return null;
   }
@@ -81,10 +80,10 @@ const parseDigest = (
     if (!Number.isFinite(durationInSeconds) || durationInSeconds < 0) {
       return null;
     }
-    return { sha256, contentHash, bytes, durationInSeconds };
+    return { sha256, bytes, durationInSeconds };
   }
 
-  return { sha256, contentHash, bytes, durationInSeconds: null };
+  return { sha256, bytes, durationInSeconds: null };
 };
 
 /** The cached digest for an export, or `null` if there isn't a usable one. */
@@ -98,7 +97,7 @@ export const readExportDigest = (
     Effect.catchAll(() => Effect.succeed(null))
   );
 
-/** Read an Exported Video once and derive both digests from the one pass. */
+/** Read an Exported Video once and digest it. */
 const computeExportDigest = (
   fs: FileSystem.FileSystem,
   exportPath: string,
@@ -106,18 +105,15 @@ const computeExportDigest = (
 ): Effect.Effect<ExportDigest, never, never> =>
   Effect.gen(function* () {
     const sha256Hash = createHash("sha256");
-    const contentHasher = new DropboxContentHasher();
     const bytes = yield* fs.stream(exportPath).pipe(
       Stream.runFold(0, (total, chunk) => {
         sha256Hash.update(chunk);
-        contentHasher.update(chunk);
         return total + chunk.byteLength;
       })
     );
     return {
       sha256: sha256Hash.digest("hex"),
       bytes,
-      contentHash: contentHasher.digest(),
       durationInSeconds,
     };
   }).pipe(Effect.orDie);
@@ -129,8 +125,8 @@ const computeExportDigest = (
  *
  * Sidecars used to be written only by an upload, which was sound while every
  * Publish uploaded everything. Once a Publish can COPY an unchanged Video
- * inside Dropbox instead, no upload happens — so a sidecar written at upload
- * time would never be written again, and the coverage that verification
+ * inside Google Drive instead, no upload happens — so a sidecar written at
+ * upload time would never be written again, and the coverage that verification
  * depends on would freeze wherever it stood.
  *
  * Ensuring it at export time inverts that: every Exported Video carries its
@@ -143,7 +139,7 @@ const computeExportDigest = (
  *
  * Keeping the answer is what lets a Publish decide by BYTES. A Video's Byte
  * Hash is the only thing that can say whether the file this machine holds is
- * the file Dropbox already has, and the sidecar is where that hash lives.
+ * the file Google Drive already has, and the sidecar is where that hash lives.
  * `null` therefore means "this machine cannot vouch for any bytes", never "the
  * bytes are different" — the caller falls back rather than concluding. A
  * caller with no use for the answer can simply discard it; best-effort

@@ -6,9 +6,9 @@
 // empty-Section elision. Import THIS from outside the package — never `./lib/*`.
 //
 // `buildCourseJson` consumes the effective-output filter internally; the filter
-// is also exported directly because export, validation, and the Dropbox mirror
-// read the same effective Sections — so there is exactly one notion of what a
-// publish ships.
+// is also exported directly because export, validation, and the Google Drive
+// upload read the same effective Sections — so there is exactly one notion of
+// what a publish ships.
 //
 // `buildCourseJsonSchema` derives the JSON Schema sidecar (`course.schema.json`)
 // from the same `CourseJsonDocumentSchema` that types the manifest — one source

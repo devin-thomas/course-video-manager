@@ -1,5 +1,5 @@
 // The single home of "what this publish ships". Export, validation, the
-// Dropbox mirror, and buildCourseJson all read effective Sections from here so
+// Google Drive upload, and buildCourseJson all read effective Sections from here so
 // there is exactly one notion of the effective output.
 //
 // A Lesson is *effective* iff it has at least one active (non-archived) Video
@@ -8,7 +8,7 @@
 // A Section is *effective* iff it retains at least one effective Lesson.
 //
 // The toggle never touches the frozen Published Version snapshot — this filter
-// affects only what reaches Dropbox and course.json, so withholding is fully
+// affects only what reaches Google Drive and course.json, so withholding is fully
 // reversible: flip the toggle back on (or mark the Lesson done) and republish.
 
 type EffectiveVideo = { archived: boolean };

@@ -17,9 +17,11 @@ import {
   PublishBlockers,
 } from "@/features/publish/publish-blockers";
 import { PendingRecoveryBanner } from "@/features/publish/pending-recovery-banner";
+import { GoogleDriveConnectBanner } from "@/features/publish/google-drive-connect-banner";
 import { selectAutofillCandidates } from "@/services/autofill-candidates";
 import { CoursePublishService } from "@/services/course-publish-service";
 import { CourseOperationsService } from "@/services/db-course-operations.server";
+import { LinkAuthOperationsService } from "@/services/db-link-auth-operations.server";
 import { VersionOperationsService } from "@/services/db-version-operations.server";
 import { classifyPendingRecovery } from "@/services/pending-recovery.server";
 import { makeAction, makeLoader } from "@/services/route-action.server";
@@ -30,11 +32,12 @@ import { data, Link, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.courses.$courseId.publish";
 
 export const loader = makeLoader({
-  effect: ({ params }) =>
+  effect: ({ params, request }) =>
     Effect.gen(function* () {
       const courseOps = yield* CourseOperationsService;
       const versionOps = yield* VersionOperationsService;
       const publishService = yield* CoursePublishService;
+      const linkAuthOps = yield* LinkAuthOperationsService;
 
       const [course, allVersions] = yield* Effect.all(
         [
@@ -77,17 +80,27 @@ export const loader = makeLoader({
       );
 
       // Reconcile-on-load (#1404): detect a crash-stranded Pending Version and
-      // classify it against the Dropbox course.json receipt. Read-only — the
-      // Promote / Discard transitions run in this route's action.
+      // classify it against the course.json receipt in Google Drive.
+      // Read-only — the Promote / Discard transitions run in this route's
+      // action.
       const pendingRecovery = yield* classifyPendingRecovery({
         courseId: params.courseId!,
         courseName: course.name,
       });
 
+      // A Publish commits to Google Drive, so it cannot start until the OAuth
+      // round trip has stored a token. The callback lands back here, with
+      // `?error=…` when it failed.
+      const googleDriveConnected =
+        (yield* linkAuthOps.getGoogleDriveAuth()) !== null;
+      const oauthError = new URL(request.url).searchParams.get("error");
+
       const { sections: _, ...latestVersionMeta } = latestVersion;
       return {
         course,
         pendingRecovery,
+        googleDriveConnected,
+        oauthError,
         latestVersion: latestVersionMeta,
         previousVersionName: previousVersion?.name ?? null,
         withTodo: {
@@ -143,6 +156,8 @@ export default function Component(props: Route.ComponentProps) {
   const {
     course,
     pendingRecovery,
+    googleDriveConnected,
+    oauthError,
     previousVersionName,
     latestVersion,
     withTodo,
@@ -222,6 +237,7 @@ export default function Component(props: Route.ComponentProps) {
     hasVersionDescription: description.trim().length > 0,
     autofillRunning: hasActiveAutofill,
     publishRunning: hasActivePublish || publishStarted,
+    storageConnected: googleDriveConnected,
   });
 
   const handleAutofill = useCallback(() => {
@@ -282,6 +298,12 @@ export default function Component(props: Route.ComponentProps) {
         {!hasActivePublish && (
           <PendingRecoveryBanner recovery={pendingRecovery} />
         )}
+
+        <GoogleDriveConnectBanner
+          connected={googleDriveConnected}
+          returnTo={`/courses/${course.id}/publish`}
+          oauthError={oauthError}
+        />
 
         {previousVersionName && (
           <p className="text-sm text-muted-foreground mb-6">
@@ -349,8 +371,8 @@ export default function Component(props: Route.ComponentProps) {
               </Label>
               <p className="text-sm text-muted-foreground">
                 {includeTodoLessons
-                  ? "Every lesson will publish — including lessons still marked to-do, which may be unreviewed. They are exported, mirrored to the team's Dropbox, and listed in course.json exactly like finished lessons."
-                  : "Lessons still marked to-do are withheld from this publish: omitted from the current course.json and its immutable Dropbox bundle. Earlier bundles stay intact for rollback. Sections left with no remaining lessons disappear from the current manifest. Nothing is lost because every lesson stays saved in full in the Published Version, and turning this back on and republishing restores it."}
+                  ? "Every lesson will publish — including lessons still marked to-do, which may be unreviewed. They are exported, uploaded to Google Drive, and listed in course.json exactly like finished lessons."
+                  : "Lessons still marked to-do are withheld from this publish: omitted from the current course.json and its immutable Bundle. Earlier bundles stay intact for rollback. Sections left with no remaining lessons disappear from the current manifest. Nothing is lost because every lesson stays saved in full in the Published Version, and turning this back on and republishing restores it."}
               </p>
             </div>
           </div>

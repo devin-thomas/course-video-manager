@@ -25,10 +25,10 @@ import { detail, emitObject, notFound, parseError } from "@/cli/helpers";
  * Publish (see CONTEXT.md) runs the Version lifecycle: Submit freezes the
  * Draft as a Pending Version (stamping name + description) and clones a fresh
  * Draft; any Unexported Video is then rendered while the Commit mirrors the
- * Pending Version's shippable output to Dropbox (`.mp4`s + `course.json` +
- * `course.schema.json`) — the two overlap, a Video uploading as soon as its
- * own export finishes — ending in the atomic `course.json` rename (the commit
- * receipt); Promote then marks it Published. A caught Commit failure — or a
+ * Pending Version's shippable output to Google Drive (`.mp4`s + `course.json`
+ * + `course.schema.json`) — the two overlap, a Video uploading as soon as its
+ * own export finishes — ending in the atomic `course.json` replacement (the
+ * commit receipt); Promote then marks it Published. A caught Commit failure — or a
  * failed export — auto-Discards the Pending Version. This just wraps
  * CoursePublishService.publish for the CLI; the heavy lifting (validation
  * gate, the export/upload pipeline, lifecycle transitions) lives there — so
@@ -104,16 +104,16 @@ const excludeTodoOpt = Options.boolean("exclude-todo").pipe(
   )
 );
 
-const PUBLISH_HELP = `Publish a Course: mirror its Draft Version to Dropbox, then freeze it as a
-named Published Version.
+const PUBLISH_HELP = `Publish a Course: upload its Draft Version to Google Drive, then freeze it as
+a named Published Version.
 
 Publish is the release operation (see CONTEXT.md). It (1) validates the
 shippable output, (2) SUBMITS the Draft — freezing it as a Pending Version
 stamped with --name and --description, and cloning a fresh Draft to carry on
 editing, (3) EXPORTS any Unexported Video and COMMITS at the same time — each
 Video starts uploading the moment its own export finishes, into a
-content-addressed asset bundle in Dropbox, ending in the atomic course.json
-rename that is the commit receipt, (4) reclaims stale exports, and (5)
+content-addressed asset bundle in Google Drive, ending in the atomic
+course.json replacement that is the commit receipt, (4) reclaims stale exports, and (5)
 PROMOTES the Pending Version to Published. Submit comes before the export so
 encoding and uploading always work against an immutable Pending Version — a
 Clip edit landing mid-Publish can never invalidate work in flight, and the
@@ -122,15 +122,15 @@ snapshot is immutable and can never be deleted; a failed export or Commit
 auto-Discards the Pending Version (see FAILURE HANDLING).
 
 LOCAL-ONLY
-  Publish renders with ffmpeg and mirrors the finished videos directory to
-  Dropbox, so it needs the author's machine. On any other box it is refused
+  Publish renders with ffmpeg and uploads the finished videos directory to
+  Google Drive, so it needs the author's machine. On any other box it is refused
   before anything happens — _tag "LocalOnlyCommandError", exit 7, no Pending
   Version, nothing half-done. Stop rather than retry.
 
 CONCURRENCY
   Export and upload are separate pools with separate budgets, connected by a
   per-Video handoff: encoding stays six-way concurrent (GPU-bound) while
-  uploads run at DROPBOX_UPLOAD_CONCURRENCY (default 4, network-bound). A
+  uploads run at GOOGLE_DRIVE_UPLOAD_CONCURRENCY (default 4, network-bound). A
   Publish therefore costs roughly the longer of the two phases rather than
   their sum. Export garbage collection runs only once every upload has
   finished, so it can never unlink a file mid-transfer.
@@ -156,10 +156,10 @@ VALIDATION
 
 FAILURE HANDLING
   Submit freezes the Draft as a Pending Version and clones a fresh Draft;
-  Publish then exports any Unexported Video and the Dropbox Commit uploads it,
-  ending in the atomic course.json rename (the commit receipt). An export is
-  measured when it is made: a file more than a second shorter than its Clips ask
-  for is a truncated encode, so that export FAILS rather than shipping — and a
+  Publish then exports any Unexported Video and the Commit uploads it to Google
+  Drive, ending in the atomic course.json replacement (the commit receipt). An
+  export is measured when it is made: a file more than a second shorter than
+  its Clips ask for is a truncated encode, so that export FAILS rather than shipping — and a
   failed export auto-Discards the Pending Version and exits 3 with
   PublishValidationError. A short file already sitting at the export address is
   treated the same way: it is re-rendered rather than trusted, and only a second
@@ -175,7 +175,7 @@ FAILURE HANDLING
   lands before the freeze (carried into the new Draft) or is refused with
   VersionNotDraftError (exit 3) — retry it against the new Draft.
 
-  A crash between the course.json rename and Promote strands the Pending
+  A crash between the course.json replacement and Promote strands the Pending
   Version at rest; the web publish page reconciles it on load (Promote if the
   receipt committed, else one-click Discard). No CLI recovery verb exists.
 
@@ -183,7 +183,7 @@ FLAGS
   --name <vX.Y.Z>     (required) the Published Version name.
   --description <text> (required) description for the Published Version.
   --exclude-todo      withhold to-do Lessons (default ships every Lesson, matching
-                      the standalone Dropbox mirror).
+                      the standalone re-sync).
 
 OUTPUT
   One pretty JSON object: { publishedVersionId, newDraftVersionId, name,
@@ -210,7 +210,7 @@ export const publishCmd = Command.make(
     const includeTodoLessons = !excludeTodo;
 
     // MACHINE GATE FIRST, ahead of even the name check: Publish renders with
-    // ffmpeg and mirrors the finished videos directory to Dropbox, so on a
+    // ffmpeg and uploads the finished videos directory to Google Drive, so on a
     // Remote Box a perfectly-formed name would not have helped. Refusing here
     // also means the Draft is never Submitted — a Publish that stopped halfway
     // would strand a Pending Version.
@@ -275,8 +275,9 @@ export const publishCmd = Command.make(
     });
 
     // loadRepoEnv MUST run before publishLayer is built: VideoProcessingService
-    // reads OPENAI_API_KEY at build time and the sync reads DROPBOX_REMOTE_PATH /
-    // FINISHED_VIDEOS_DIRECTORY at runtime, all from process.env.
+    // reads OPENAI_API_KEY at build time and the sync reads
+    // GOOGLE_DRIVE_COURSES_FOLDER_ID / FINISHED_VIDEOS_DIRECTORY at runtime, all
+    // from process.env.
     return machine.pipe(
       Effect.zipRight(Effect.sync(() => loadRepoEnv())),
       Effect.zipRight(

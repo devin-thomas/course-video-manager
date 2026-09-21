@@ -32,9 +32,9 @@ const EXIT_CODES: Record<string, number> = {
   // not an internal one. `course publish` lets it surface untouched so its
   // structured fields (unexportedVideoIds, courseViewLintCount) reach the agent.
   PublishValidationError: 3,
-  // The Dropbox commit failed (after one in-flight retry for sync_failed);
-  // the Pending Version was auto-Discarded and the edits are safe in the new
-  // Draft (issue #1401). Internal-failure class: exit 4.
+  // The Commit to Google Drive failed (after one in-flight retry for
+  // sync_failed); the Pending Version was auto-Discarded and the edits are
+  // safe in the new Draft (issue #1401). Internal-failure class: exit 4.
   PublishCommitFailedError: 4,
   // A write refused because it targeted a non-Draft (Pending/Published)
   // version — invalid input, like PublishValidationError.

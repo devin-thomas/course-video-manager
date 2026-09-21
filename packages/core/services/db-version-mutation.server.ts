@@ -37,8 +37,8 @@ export const lockCourseForVersionMutation = (
  * Submit (issue #1348): the Draft → Pending transition. In one transaction it
  * clones the Draft's structure into a fresh Draft, then stamps the source with
  * its publish name/description and marks it `pending`. The Pending Version is
- * what Commit uploads; it is Promoted to `published` once the Dropbox
- * `course.json` rename (the commit receipt) lands, or Discarded on a caught
+ * what Commit uploads; it is Promoted to `published` once the
+ * `course.json` Commit receipt lands, or Discarded on a caught
  * Commit failure (issue #1401).
  *
  * At most one Pending Version may exist per course — a leftover Pending (a

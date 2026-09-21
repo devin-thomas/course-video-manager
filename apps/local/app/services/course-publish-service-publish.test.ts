@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { writeAlreadyExportedVideo } from "@/test-utils/exported-video-fixture";
 import { Effect, Layer } from "effect";
 import fs from "node:fs";
@@ -6,9 +6,10 @@ import path from "node:path";
 import { VersionOperationsService } from "@/services/db-version-operations.server";
 import { VideoProcessingService } from "@/services/video-processing-service";
 import { CoursePublishService } from "@/services/course-publish-service";
+import { isSmallFileCreate } from "@/test-utils/fake-google-drive";
 import {
-  DROPBOX_REMOTE_PATH,
-  fakeDropbox,
+  COURSE_DIR,
+  fakeDrive,
   finishedVideosDir,
   setupPublishServiceTests,
   setupPublishableCourse as setup,
@@ -112,43 +113,23 @@ describe("CoursePublishService — publish", () => {
   it("Discards the Pending Version after one failed in-flight retry of the Commit", async () => {
     const { course, run } = await setup();
 
-    // Make the receipt upload fail persistently by having the fake Dropbox
-    // reject uploads to the course.json path.
+    // Make the receipt write fail persistently by having the fake Drive
+    // reject every create of course.json. 400 is not transient, so the client
+    // does not retry it away; only the Publish's own in-flight retry does.
     let uploadAttempts = 0;
-    const originalFetch = fakeDropbox.handleFetch;
-    fakeDropbox.cleanup();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-        const urlStr =
-          typeof url === "string"
-            ? url
-            : url instanceof URL
-              ? url.toString()
-              : url.url;
-        if (
-          urlStr.includes("/2/files/upload") &&
-          !urlStr.includes("session") &&
-          init
-        ) {
-          const rawArg = (init.headers as Record<string, string>)[
-            "Dropbox-API-Arg"
-          ];
-          const apiArg = rawArg ? JSON.parse(rawArg) : {};
-          if (
-            apiArg.path?.endsWith("/course.json") &&
-            apiArg.mode === "overwrite"
-          ) {
-            uploadAttempts++;
-            return new Response(
-              JSON.stringify({ error_summary: "too_many_write_operations/." }),
-              { status: 409 }
-            );
-          }
-        }
-        return originalFetch(url as any, init);
-      })
-    );
+    fakeDrive.failNextRequests({
+      match: (url, init) => {
+        const isReceipt =
+          isSmallFileCreate(url, init) &&
+          Buffer.from(init.body as Uint8Array)
+            .toString("utf-8")
+            .includes('"name":"course.json"');
+        if (isReceipt) uploadAttempts++;
+        return isReceipt;
+      },
+      count: 100,
+      status: 400,
+    });
 
     const result = await run(
       Effect.gen(function* () {
@@ -175,9 +156,9 @@ describe("CoursePublishService — publish", () => {
       error: true,
       errorDetails: { reason: "sync_failed" },
     });
-    // The retry schedule retries the receipt upload (with internal retries
-    // for transient errors), then the outer publish retries the whole sync.
-    // The Pending Version was auto-Discarded.
+    // The receipt write failed, and so did the one in-flight retry of the
+    // whole sync. The Pending Version was auto-Discarded.
+    expect(uploadAttempts).toBe(2);
     expect(result.versions).toHaveLength(1);
     expect(result.versions[0]).toMatchObject({
       id: (result.outcome as any).errorDetails.newDraftVersionId,
@@ -254,13 +235,9 @@ describe("CoursePublishService — publish", () => {
           includeTodoLessons: false,
         });
         // Delete the remote receipt, then re-sync.
-        fakeDropbox.files.delete(
-          `${DROPBOX_REMOTE_PATH}/test-course/course.json`.toLowerCase()
-        );
-        const retry = yield* svc.syncToDropbox(course.id, false);
-        const stored = fakeDropbox.get(
-          `${DROPBOX_REMOTE_PATH}/test-course/course.json`
-        );
+        fakeDrive.remove(`${COURSE_DIR}/course.json`);
+        const retry = yield* svc.syncPublishedVersion(course.id, false);
+        const stored = fakeDrive.fileAt(`${COURSE_DIR}/course.json`);
         const manifest = JSON.parse(stored!.content.toString("utf-8"));
         return { outcome, retry, manifest };
       })

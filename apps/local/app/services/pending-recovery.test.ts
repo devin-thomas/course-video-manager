@@ -1,8 +1,8 @@
 /**
  * Reconcile-on-load classification for a crash-stranded Pending Version
  * (issues #1350/#1404). The classifier correlates the course's Pending row
- * (at most one, by the partial unique index) against the root Dropbox
- * `course.json` receipt downloaded via the Dropbox HTTP API.
+ * (at most one, by the partial unique index) against the `course.json`
+ * receipt in the Course's Google Drive folder.
  */
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { ConfigProvider, Effect, Layer } from "effect";
@@ -13,19 +13,20 @@ import {
   type TestDb,
 } from "@/test-utils/pglite";
 import {
-  createFakeDropbox,
-  FAKE_ACCESS_TOKEN,
-} from "@/test-utils/fake-dropbox";
+  createFakeGoogleDrive,
+  FAKE_COURSES_FOLDER_ID,
+  FAKE_DRIVE_ACCESS_TOKEN,
+} from "@/test-utils/fake-google-drive";
 import { CourseOperationsService } from "@/services/db-course-operations.server";
 import { VersionOperationsService } from "@/services/db-version-operations.server";
 import { LessonSectionOperationsService } from "@/services/db-lesson-section-operations.server";
 import { LinkAuthOperationsService } from "@/services/db-link-auth-operations.server";
 import { DrizzleService } from "@/services/drizzle-service.server";
 import { classifyPendingRecovery } from "@/services/pending-recovery.server";
-import { dropboxAuth } from "@/db/schema";
+import { googleDriveAuth } from "@/db/schema";
 
 let testDb: TestDb;
-let fakeDropbox: ReturnType<typeof createFakeDropbox>;
+let fakeDrive: ReturnType<typeof createFakeGoogleDrive>;
 
 beforeAll(async () => {
   const result = await createTestDb();
@@ -33,21 +34,20 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
-  fakeDropbox?.cleanup();
+  fakeDrive?.cleanup();
 });
 
 const COURSE_NAME = "recovery-course";
-const DROPBOX_REMOTE_PATH = "/Courses";
 
 const setup = async () => {
   await truncateAllTables(testDb);
 
-  fakeDropbox = createFakeDropbox();
-  fakeDropbox.install();
+  fakeDrive = createFakeGoogleDrive();
+  fakeDrive.install();
 
-  // Seed Dropbox auth.
-  await testDb.insert(dropboxAuth).values({
-    accessToken: FAKE_ACCESS_TOKEN,
+  // Seed Google Drive auth.
+  await testDb.insert(googleDriveAuth).values({
+    accessToken: FAKE_DRIVE_ACCESS_TOKEN,
     refreshToken: "fake-refresh-token",
     expiresAt: new Date(Date.now() + 3600 * 1000),
   });
@@ -66,7 +66,9 @@ const setup = async () => {
         Effect.provide(dbLayer),
         Effect.withConfigProvider(
           ConfigProvider.fromMap(
-            new Map([["DROPBOX_REMOTE_PATH", DROPBOX_REMOTE_PATH]])
+            new Map([
+              ["GOOGLE_DRIVE_COURSES_FOLDER_ID", FAKE_COURSES_FOLDER_ID],
+            ])
           )
         )
       ) as Effect.Effect<A, E, never>
@@ -108,8 +110,8 @@ const setup = async () => {
     );
 
   const writeReceipt = (contents: string) => {
-    fakeDropbox.store(
-      `${DROPBOX_REMOTE_PATH}/${COURSE_NAME}/course.json`,
+    fakeDrive.store(
+      `${COURSE_NAME}/course.json`,
       Buffer.from(contents, "utf-8")
     );
   };
@@ -158,11 +160,11 @@ describe("classifyPendingRecovery (#1404)", () => {
     expect((await classify())?.receiptState).toBe("unreadable");
   });
 
-  it("no Dropbox auth refuses to classify (unreadable)", async () => {
+  it("no Google Drive auth refuses to classify (unreadable)", async () => {
     const { submit, run, course } = await setup();
     await submit();
-    // Delete the auth row so getValidDropboxAccessToken fails.
-    await testDb.delete(dropboxAuth);
+    // Delete the auth row so getValidGoogleDriveAccessToken fails.
+    await testDb.delete(googleDriveAuth);
     const result = await run(
       classifyPendingRecovery({
         courseId: course.id,

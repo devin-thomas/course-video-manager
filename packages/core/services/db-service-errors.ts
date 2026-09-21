@@ -46,7 +46,7 @@ export class VersionNotDraftError extends Data.TaggedError(
 
 /**
  * Promote and Discard act only on a Pending Version — Promote marks it
- * Published once the Dropbox `course.json` rename (the commit receipt) lands,
+ * Published once the `course.json` Commit receipt lands,
  * and Discard deletes it. Neither may ever touch a Draft or Published row.
  */
 export class VersionNotPendingError extends Data.TaggedError(

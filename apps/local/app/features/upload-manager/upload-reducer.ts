@@ -63,7 +63,7 @@ export namespace uploadReducer {
     exportStage: ExportStage | null;
     isBatchEntry: boolean;
     // Set only for a per-Video task under a Publish, which carries on into
-    // Dropbox once its encode is done. A standalone export has nowhere to
+    // Google Drive once its encode is done. A standalone export has nowhere to
     // upload to and leaves these at their defaults.
     videoUploadStage: VideoUploadStage | null;
     uploadedBytes: number;
@@ -294,7 +294,7 @@ const reduceUploads = (
     case "UPDATE_VIDEO_UPLOAD_STAGE": {
       const upload = state.uploads[action.uploadId];
       if (!upload || upload.uploadType !== "export") return state;
-      // The Dropbox commit is retried once server-side, which replays these
+      // The Commit is retried once server-side, which replays these
       // events for Videos that already landed. A settled task stays settled.
       if (isSettled(upload)) return state;
 

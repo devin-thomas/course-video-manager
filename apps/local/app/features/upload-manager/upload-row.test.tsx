@@ -213,7 +213,7 @@ describe("UploadRow for a per-Video task under a Publish", () => {
     ).toContain("Waiting to upload");
     expect(
       render(videoTask({ progress: 74, videoUploadStage: "uploading" }))
-    ).toContain("Uploading to Dropbox");
+    ).toContain("Uploading to Google Drive");
   });
 
   it("says the Video was uploaded, not merely exported, once it lands", () => {

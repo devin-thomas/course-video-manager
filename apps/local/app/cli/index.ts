@@ -161,12 +161,13 @@ WRITES
                                      deadline, --status to close it out);
                                      'archive' is the only hide
     course  publish                  Submit the Draft as a Pending Version,
-                                     Commit it to Dropbox, Promote to Published
-                                     (--name vX.Y.Z, a lowercase-'v' semver)
+                                     Commit it to Google Drive, Promote to
+                                     Published (--name vX.Y.Z, a lowercase-'v'
+                                     semver)
   See each noun's --help for the authoritative contract.
 
-  Publish is heavier than the other writes: it also touches the filesystem
-  (Dropbox) and reads publish-only config from the repo .env.
+  Publish is heavier than the other writes: it also reads the filesystem,
+  uploads to Google Drive and reads publish-only config from the repo .env.
 
 NOUNS
   course version section learning-goal lesson video clip chapter overlay beat

@@ -1,13 +1,3 @@
-import { Data } from "effect";
-
-export class DoesNotExistOnDbError extends Data.TaggedError(
-  "DoesNotExistOnDbError"
-)<{
-  type: "section" | "lesson";
-  path: string;
-  message: string;
-}> {}
-
 export type Chapter = {
   title: string;
   startTime: number;

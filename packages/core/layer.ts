@@ -22,9 +22,9 @@ import { VideoOperationsService } from "./services/db-video-operations.server.js
  * these, and the deployed app's `ManagedRuntime` is built from it once.
  *
  * Growing this layer is how a verb group is added — see the `apps/remote`
- * router. Note what is NOT here and never will be: the YouTube, Dropbox and
- * AI Hero authentication rows have no service on this list, so no endpoint can
- * be written against them by accident.
+ * router. Note what is NOT here and never will be: the authentication rows
+ * (Google Drive, and the unused upstream token tables) have no service on this
+ * list, so no endpoint can be written against them by accident.
  */
 export const domainServicesLayer = Layer.mergeAll(
   ApiTokenOperationsService.Default,

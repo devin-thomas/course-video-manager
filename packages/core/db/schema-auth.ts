@@ -48,6 +48,10 @@ export const aiHeroAuth = createTable("ai_hero_auth", {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+/**
+ * Unused in this fork: Google Drive is the only course storage backend and the
+ * Dropbox one was removed (ADR 0029). See youtubeAuth.
+ */
 export const dropboxAuth = createTable("dropbox_auth", {
   id: varchar("id", { length: 255 })
     .notNull()

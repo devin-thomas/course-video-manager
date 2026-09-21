@@ -24,7 +24,7 @@ export type FakeTextGenerationOutcome =
 const OK: FakeTextGenerationOutcome = { kind: "ok" };
 
 /**
- * A TextGeneration fake, following the pattern set by the Dropbox and
+ * A TextGeneration fake, following the pattern set by the Google Drive and
  * video-processing fakes: the whole model boundary replaced by canned answers
  * that a test can steer per Video.
  *

@@ -172,7 +172,7 @@ function SuccessDetail({ upload }: { upload: uploadReducer.UploadEntry }) {
   switch (upload.uploadType) {
     case "export":
       // A per-Video task under a Publish did not stop at the export: it also
-      // shipped the file to Dropbox.
+      // shipped the file to Google Drive.
       return (
         <SuccessBadge label={upload.parentUploadId ? "Uploaded" : "Exported"} />
       );

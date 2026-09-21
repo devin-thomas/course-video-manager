@@ -4,7 +4,11 @@ import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { CoursePublishService } from "@/services/course-publish-service";
 import {
-  fakeDropbox,
+  isCopyRequest,
+  isVideoUploadStart,
+} from "@/test-utils/fake-google-drive";
+import {
+  fakeDrive,
   setupPublishServiceTests,
   setupPublishableCourse as setup,
 } from "./course-publish-service-test-setup";
@@ -72,44 +76,39 @@ const reRender = (videoId: string) =>
     return yield* svc.exportVideo(videoId);
   });
 
-/** Only the `.mp4` uploads inside a bundle. */
-const isVideoUploadRequest = (url: string, init: RequestInit) => {
-  if (!url.includes("/2/files/upload") || url.includes("session")) return false;
-  const arg = (init.headers as Record<string, string> | undefined)?.[
-    "Dropbox-API-Arg"
-  ];
-  return Boolean(arg && JSON.parse(arg).path.endsWith(".mp4"));
-};
-
 const videoUploadCount = () =>
-  fakeDropbox.fetchCalls.filter((call) =>
-    isVideoUploadRequest(call.url, call.init)
-  ).length;
+  fakeDrive.calls.filter((call) => isVideoUploadStart(call.url, call.init))
+    .length;
 
-/** How many Video uploads carried exactly these bytes. */
+/**
+ * How many Video uploads carried exactly these bytes. These files are far
+ * smaller than one chunk, so each upload sends its bytes in a single PUT.
+ */
 const uploadsCarrying = (content: string) =>
-  fakeDropbox.fetchCalls.filter(
+  fakeDrive.calls.filter(
     (call) =>
-      isVideoUploadRequest(call.url, call.init) &&
+      call.method === "PUT" &&
+      call.url.searchParams.has("upload_id") &&
       Buffer.from(call.init.body as Uint8Array).toString("utf-8") === content
   ).length;
 
-/** Every entry of every `copy_batch_v2` call this test has made. */
-const copyBatchEntries = () =>
-  fakeDropbox.fetchCalls
-    .filter((call) => call.url.includes("/2/files/copy_batch_v2"))
-    .flatMap(
-      (call) => JSON.parse(call.init.body as string).entries as Array<any>
-    );
+/** The path of the source file of every `files.copy` this test has made. */
+const copySourcePaths = () =>
+  fakeDrive.calls
+    .filter((call) => isCopyRequest(call.url, call.init))
+    .map((call) => {
+      const sourceId = call.url.pathname.split("/").at(-2)!;
+      return fakeDrive.tree().find(({ item }) => item.id === sourceId)!.path;
+    });
 
-/** Every `.mp4` Dropbox holds, keyed by its bundle directory. */
+/** Every `.mp4` Drive holds, keyed by its bundle directory. */
 const bundledVideos = () => {
   const byBundle = new Map<string, Array<{ path: string; content: Buffer }>>();
-  for (const stored of fakeDropbox.files.values()) {
-    if (!stored.pathDisplay.endsWith(".mp4")) continue;
-    const bundle = stored.pathDisplay.split("/versions/")[1]!.split("/")[0]!;
+  for (const { path, item } of fakeDrive.tree()) {
+    if (!path.endsWith(".mp4")) continue;
+    const bundle = path.split("/versions/")[1]!.split("/")[0]!;
     const entries = byBundle.get(bundle) ?? [];
-    entries.push({ path: stored.pathDisplay, content: stored.content });
+    entries.push({ path, content: item.content });
     byBundle.set(bundle, entries);
   }
   return byBundle;
@@ -122,9 +121,7 @@ const latestBundleVideos = () => {
 };
 
 const readCommitReceipt = (courseName: string) => {
-  const stored = Array.from(fakeDropbox.files.values()).find((file) =>
-    file.pathDisplay.endsWith(`${courseName}/course.json`)
-  );
+  const stored = fakeDrive.fileAt(`${courseName}/course.json`);
   return JSON.parse(stored!.content.toString("utf-8"));
 };
 
@@ -218,10 +215,8 @@ describe("CoursePublishService — when two Videos hold identical bytes", () => 
     // Bundle that holds those bytes — the first Video's, at an address the
     // second Video's Export Hash would never have found.
     expect(videoUploadCount()).toBe(2);
-    expect(copyBatchEntries()).toHaveLength(2);
-    const sources = new Set(
-      copyBatchEntries().map((entry) => entry.from_path as string)
-    );
+    expect(copySourcePaths()).toHaveLength(2);
+    const sources = new Set(copySourcePaths());
     expect(sources.size).toBe(1);
     expect([...sources][0]).toContain(videos[0]!.relativeAssetPath);
 

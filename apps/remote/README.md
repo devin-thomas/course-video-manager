@@ -27,10 +27,10 @@ Video Files directory, no ffmpeg, no OBS and no git checkout. `pnpm run
 lint:boundaries` makes an `fs`/`path`/`child_process` import a build failure
 rather than a runtime error on a machine nobody is watching.
 
-**No authentication rows.** No endpoint reads or writes the YouTube, Dropbox or
-AI Hero credentials. They live in the same database because they must, but they
-have no RPC surface — so a leaked API token cannot become a leaked YouTube
-refresh token. This is a decision about which endpoints exist, not a permissions
+**No authentication rows.** No endpoint reads or writes the Google Drive
+credentials (or the unused upstream token tables). They live in the same
+database because they must, but they have no RPC surface — so a leaked API token
+cannot become a leaked Google Drive refresh token. This is a decision about which endpoints exist, not a permissions
 system, and it is kept by `@cvm/core/layer` not listing those services.
 
 **One endpoint per CLI verb.** No resource modelling. The API's job is to be the

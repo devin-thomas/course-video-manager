@@ -9,6 +9,7 @@ const input = (overrides: Partial<PublishActionInput> = {}) =>
     hasVersionDescription: true,
     autofillRunning: false,
     publishRunning: false,
+    storageConnected: true,
     ...overrides,
   });
 
@@ -81,6 +82,14 @@ describe("the publish page's one button", () => {
       kind: "autofill",
       count: 3,
       label: "Autofill 3 Videos",
+      enabled: false,
+    });
+  });
+
+  it("cannot publish until Google Drive is connected", () => {
+    expect(input({ storageConnected: false })).toEqual({
+      kind: "publish",
+      label: "Publish",
       enabled: false,
     });
   });

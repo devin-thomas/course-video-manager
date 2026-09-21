@@ -89,13 +89,20 @@ expects a specific backend — device-code OAuth, S3 multipart uploads,
 This fork does one job: edit lessons, and publish Course bundles to Google
 Drive.
 
+Upstream publishes those bundles to Dropbox. That backend is removed too:
+Google Drive is the only course storage (ADR 0029). Connect it once from any
+course's publish page ("Connect Google Drive"), with `GOOGLE_DRIVE_CLIENT_ID`,
+`GOOGLE_DRIVE_CLIENT_SECRET` and `GOOGLE_DRIVE_COURSES_FOLDER_ID` set in `.env`
+(see `.env.example`).
+
 What is kept: the **Details** tab still drafts a title, description and
 thumbnail (with the AI generators for each); the **X / LinkedIn** tab still
 drafts a social caption and opens the site to paste it into; the article
 writer keeps all its writing modes, including its newsletter document mode;
 the Shorts editor still records, edits, exports and renders vertical video.
 
-The `youtube_auth` and `ai_hero_auth` tables are still in the schema, unused.
+The `youtube_auth`, `ai_hero_auth` and `dropbox_auth` tables are still in the
+schema, unused.
 Migrations here are additive-only, so dropping them is a separate two-step
 change.
 

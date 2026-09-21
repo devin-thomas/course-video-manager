@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildChapters } from "./publish-to-dropbox";
+import { buildChapters } from "./course-publish-chapters";
 
 describe("buildChapters", () => {
   const clip = (order: string, duration: number) => ({
