@@ -115,8 +115,12 @@ const OVERLAY_TRANSFORMS: Record<OverlayKind, OverlayTransform | null> = {
  * - 2 — the ease became exact and the footage started reading it on the
  *   content's own frame grid. Up to 38px of the move landed on a different
  *   frame from the panel before this.
+ * - 3 — the `pad` became whole source widths. The fractional one was
+ *   truncated to even pixels, so the move handed back a 1918-wide frame that
+ *   was stretched to 1920 — every frame of a Bullet Panel Video resampled, and
+ *   the footage up to 2px from where the preview put it.
  */
-export const OVERLAY_CAMERA_VERSION = 2;
+export const OVERLAY_CAMERA_VERSION = 3;
 
 /**
  * The move a raw `kind` column asks for, or `null` for none. Every consumer
@@ -412,8 +416,9 @@ const SLIDE_BACKGROUND_COLOR = "#101011";
  * make room — which is the zoom this feature exists to avoid. So the chain is
  * two nodes instead:
  *
- * 1. a STATIC `pad` that widens the canvas by the move's own travel, putting
- *    the untouched picture in the middle of a wider frame;
+ * 1. a STATIC `pad` that widens the canvas by at least the move's own travel
+ *    (a whole source width per side it moves towards), putting the untouched
+ *    picture in the middle of a wider frame;
  * 2. an ANIMATED `crop` that takes an original-sized window back out of it, at
  *    an `x` that walks left as the footage is meant to travel right.
  *
@@ -439,8 +444,15 @@ export const overlayTransformVideoFilter = (
   // SOURCE's width: a rightward slide opens space on the left, a leftward one
   // on the right, and an end that never leaves centre asks for neither.
   const offsets = [transform.from.offsetX, transform.to.offsetX];
-  const padLeft = Math.max(0, ...offsets);
-  const padRight = Math.max(0, ...offsets.map((offset) => -offset));
+  // Rounded UP to WHOLE source widths. The pad is only ever seen where the
+  // footage has slid away from it, so a wider one changes no pixel — but a
+  // fractional one does: `pad` truncates its size and offset to whole, even
+  // (chroma-aligned) pixels, so `iw*1.2114…` on a 1920 source is 2324, not
+  // 2326, and `crop` then recovers a 1918-wide picture from it that the
+  // normalize `scale` stretches back — resampling every frame of the Video.
+  // Whole multiples of an even width are exact, so the pair truly cancels.
+  const padLeft = Math.ceil(Math.max(0, ...offsets));
+  const padRight = Math.ceil(Math.max(0, ...offsets.map((offset) => -offset)));
   // The padded canvas, as a multiple of the source's width. Inside `crop` this
   // is the divisor that recovers the source's own width from `iw`, because by
   // then `iw` is the PADDED width.

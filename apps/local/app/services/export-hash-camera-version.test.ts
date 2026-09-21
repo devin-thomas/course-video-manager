@@ -68,13 +68,15 @@ describe("the camera move's version in the export address", () => {
    * is re-addressed rather than keeping bytes that no longer match what this
    * code renders.
    *
-   * The first literal is the address that same Overlay had before the version
-   * existed. It must not still be in use.
+   * The first literals are the addresses that same Overlay had before the
+   * version existed and under version 2 (the 2px-narrow pad). Neither may
+   * still be in use.
    */
   it("moves a Bullet Panel's address, so an old export cannot be kept", () => {
     const panel = overlay({ kind: "bulletPanel" });
     expect(addressOf(panel)).not.toBe("41a4047b58f30b4c4eddfea603e10a89");
-    expect(addressOf(panel)).toBe("c300c12668892ca79a9e727a008dc231");
+    expect(addressOf(panel)).not.toBe("c300c12668892ca79a9e727a008dc231");
+    expect(addressOf(panel)).toBe("f7970a852c33c94a1ea104dd1a119d58");
   });
 
   it("keeps the two Kinds at different addresses", () => {

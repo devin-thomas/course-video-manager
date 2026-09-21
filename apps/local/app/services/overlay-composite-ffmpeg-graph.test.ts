@@ -129,7 +129,12 @@ const measureLeftEdges = (filter: string, fps: number, seconds: number) => {
     { maxBuffer: 64 * 1024 * 1024 }
   );
 
-  const frames = Math.floor(raw.length / (width * height));
+  // The move must hand back a frame of the source's own size. If it does not,
+  // every row read below is misaligned, so say so plainly first: ffmpeg's
+  // `pad` truncates to even pixels, and a fractional pad once came back 1918
+  // wide here.
+  const frames = Math.round(fps * seconds);
+  expect(raw.length).toBe(frames * width * height);
   return Array.from({ length: frames }, (_, frame) => {
     const row = raw.subarray(
       frame * width * height,
