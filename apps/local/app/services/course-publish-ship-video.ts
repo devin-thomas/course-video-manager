@@ -1,4 +1,4 @@
-import { Effect, Stream } from "effect";
+import { Effect } from "effect";
 import { FileSystem } from "@effect/platform";
 import { createHash } from "node:crypto";
 import { ExportError } from "./course-publish-errors";
@@ -8,7 +8,11 @@ import {
 } from "./course-publish-export-events";
 import type { ReusableSource } from "./course-publish-reuse-plan";
 import type { CourseStorage, RemoteFile } from "./course-storage";
-import { readExportDigest, writeExportDigest } from "./export-sha256-sidecar";
+import {
+  digestExportFile,
+  readExportDigest,
+  writeExportDigest,
+} from "./export-sha256-sidecar";
 
 /**
  * One Video's place in the bundle, all of it read off the DATABASE: where it
@@ -23,32 +27,6 @@ export type VideoEntry = {
   relativeAssetPath: string;
   exportHash: string | null;
 };
-
-/**
- * Read an Exported Video off disk purely to digest it. Only Videos this
- * Publish is NOT sending go through here — anything actually uploaded is
- * digested off the upload's own byte stream instead, so no file is ever read
- * twice and the whole-course pre-hash pass no longer exists.
- */
-const hashFileLocally = Effect.fn("hashFileLocally")(function* (
-  effectFs: FileSystem.FileSystem,
-  filePath: string
-) {
-  const sha256Hash = createHash("sha256");
-  const bytes = yield* effectFs.stream(filePath).pipe(
-    Stream.runFold(0, (total, chunk) => {
-      sha256Hash.update(chunk);
-      return total + chunk.byteLength;
-    })
-  );
-  return {
-    sha256: sha256Hash.digest("hex"),
-    bytes,
-    // Bytes alone cannot say how long a file plays for. Whoever needs the
-    // duration measures it; this read is not the place to shell out to ffprobe.
-    durationInSeconds: null,
-  };
-});
 
 /**
  * Everything one Video's trip through `shipVideo` needs from the enclosing
@@ -152,7 +130,7 @@ export function createShipVideo(deps: {
   ) {
     const cached = yield* readExportDigest(effectFs, entry.localPath, fileSize);
     const hashes =
-      cached ?? (yield* hashFileLocally(effectFs, entry.localPath));
+      cached ?? (yield* digestExportFile(effectFs, entry.localPath, null));
     if (!cached) {
       yield* writeExportDigest(effectFs, entry.localPath, hashes);
     }

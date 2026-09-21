@@ -23,8 +23,9 @@ import { VideoOperationsService } from "./services/db-video-operations.server.js
  *
  * Growing this layer is how a verb group is added — see the `apps/remote`
  * router. Note what is NOT here and never will be: the authentication rows
- * (Google Drive, and the unused upstream token tables) have no service on this
- * list, so no endpoint can be written against them by accident.
+ * (`google_drive_auth`, and the unused `dropbox_auth`, `youtube_auth` and
+ * `ai_hero_auth`) have no service on this list, so no endpoint can be written
+ * against them by accident.
  */
 export const domainServicesLayer = Layer.mergeAll(
   ApiTokenOperationsService.Default,

@@ -4,8 +4,8 @@ import type { Route } from "./+types/api.courses.sync-sse";
 import { ConfigProvider, Effect, Schema } from "effect";
 import { runtimeLive } from "@/services/layer.server";
 
-const publishRepoSchema = Schema.Struct({
-  repoId: Schema.String,
+const syncCourseSchema = Schema.Struct({
+  courseId: Schema.String,
   courseVersionId: Schema.optional(Schema.String),
   includeTodoLessons: Schema.optional(Schema.Boolean),
 });
@@ -22,20 +22,20 @@ export const action = async ({ request }: Route.ActionArgs) => {
     runtime: runtimeLive,
     program: (sendEvent) =>
       Effect.gen(function* () {
-        const result = yield* Schema.decodeUnknown(publishRepoSchema)(body);
+        const result = yield* Schema.decodeUnknown(syncCourseSchema)(body);
 
         const publishService = yield* CoursePublishService;
         // Pending commits must retry the exact frozen Course Version with the
         // original to-do policy. Without an id, re-sync the latest frozen version.
         const { missingVideos } = result.courseVersionId
           ? yield* publishService.syncFrozenVersion(
-              result.repoId,
+              result.courseId,
               result.courseVersionId,
               result.includeTodoLessons ?? true,
               sendEvent
             )
           : yield* publishService.syncPublishedVersion(
-              result.repoId,
+              result.courseId,
               result.includeTodoLessons ?? true,
               sendEvent
             );
@@ -55,6 +55,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
         },
       },
     ],
-    fallbackMessage: "Publish failed unexpectedly",
+    fallbackMessage: "Sync failed unexpectedly",
   });
 };

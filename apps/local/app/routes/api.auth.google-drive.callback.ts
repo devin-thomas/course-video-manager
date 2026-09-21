@@ -6,7 +6,10 @@ import {
   GOOGLE_DRIVE_CALLBACK_PATH,
   googleDriveClientCredentials,
 } from "@/services/google-drive-auth-service";
-import { safeReturnTo } from "@/services/google-drive-return-to";
+import {
+  returnToWithError,
+  safeReturnTo,
+} from "@/services/google-drive-return-to";
 
 class GoogleDriveOAuthError extends Data.TaggedError("GoogleDriveOAuthError")<{
   message: string;
@@ -20,10 +23,10 @@ export const loader = async ({ request }: { request: Request }) => {
 
   if (error) {
     console.error("Google Drive OAuth error:", error);
-    return redirect(`${state}?error=oauth_${encodeURIComponent(error)}`);
+    return redirect(returnToWithError(state, `oauth_${error}`));
   }
   if (!code) {
-    return redirect(`${state}?error=no_code`);
+    return redirect(returnToWithError(state, "no_code"));
   }
 
   return Effect.gen(function* () {
@@ -75,16 +78,16 @@ export const loader = async ({ request }: { request: Request }) => {
   }).pipe(
     Effect.tapErrorCause((e) => Console.log(e)),
     Effect.catchTag("ConfigError", () =>
-      Effect.succeed(redirect("/?error=oauth_not_configured"))
+      Effect.succeed(redirect(returnToWithError(state, "oauth_not_configured")))
     ),
     Effect.catchTag("GoogleDriveOAuthError", (e) => {
       console.error("Google Drive OAuth error:", e.message);
-      return Effect.succeed(redirect(`${state}?error=oauth_failed`));
+      return Effect.succeed(redirect(returnToWithError(state, "oauth_failed")));
     }),
     Effect.withConfigProvider(ConfigProvider.fromEnv()),
     Effect.catchAll((e) => {
       console.error("Google Drive OAuth callback error:", e);
-      return Effect.succeed(redirect(`${state}?error=oauth_error`));
+      return Effect.succeed(redirect(returnToWithError(state, "oauth_error")));
     }),
     runtimeLive.runPromise
   );

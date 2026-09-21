@@ -28,7 +28,8 @@ lint:boundaries` makes an `fs`/`path`/`child_process` import a build failure
 rather than a runtime error on a machine nobody is watching.
 
 **No authentication rows.** No endpoint reads or writes the Google Drive
-credentials (or the unused upstream token tables). They live in the same
+credentials (`google_drive_auth`) or the unused `dropbox_auth`, `youtube_auth`
+and `ai_hero_auth` tables. They live in the same
 database because they must, but they have no RPC surface — so a leaked API token
 cannot become a leaked Google Drive refresh token. This is a decision about which endpoints exist, not a permissions
 system, and it is kept by `@cvm/core/layer` not listing those services.

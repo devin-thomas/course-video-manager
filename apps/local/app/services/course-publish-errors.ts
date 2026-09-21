@@ -30,10 +30,10 @@ export class ExportError extends Data.TaggedError("ExportError")<{
   message: string;
 }> {}
 
-export class DoesNotExistOnDbError extends Data.TaggedError(
-  "DoesNotExistOnDbError"
+/** A Course with no Course Version at all — there is nothing to sync. */
+export class CourseHasNoVersionError extends Data.TaggedError(
+  "CourseHasNoVersionError"
 )<{
-  type: "section" | "lesson";
-  path: string;
+  courseId: string;
   message: string;
 }> {}

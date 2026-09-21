@@ -5,7 +5,10 @@ import {
   GOOGLE_DRIVE_SCOPES,
   googleDriveClientCredentials,
 } from "@/services/google-drive-auth-service";
-import { safeReturnTo } from "@/services/google-drive-return-to";
+import {
+  returnToWithError,
+  safeReturnTo,
+} from "@/services/google-drive-return-to";
 
 /**
  * Starts the Google OAuth flow that lets CVM publish into Google Drive. Visit
@@ -35,12 +38,11 @@ export const loader = async ({ request }: { request: Request }) => {
     return redirect(authUrl.toString());
   }).pipe(
     Effect.tapErrorCause((e) => Console.log(e)),
+    // GOOGLE_DRIVE_CLIENT_ID / GOOGLE_DRIVE_CLIENT_SECRET missing: back to
+    // where the author came from, which shows the error beside the button.
     Effect.catchTag("ConfigError", () =>
-      Effect.die(
-        new Response(
-          "Google Drive OAuth not configured (GOOGLE_DRIVE_CLIENT_ID / GOOGLE_DRIVE_CLIENT_SECRET)",
-          { status: 500 }
-        )
+      Effect.succeed(
+        redirect(returnToWithError(returnTo, "oauth_not_configured"))
       )
     ),
     Effect.withConfigProvider(ConfigProvider.fromEnv()),

@@ -1,5 +1,6 @@
 import { Effect, Stream } from "effect";
 import { FileSystem } from "@effect/platform";
+import type { PlatformError } from "@effect/platform/Error";
 import { createHash } from "node:crypto";
 
 /**
@@ -97,12 +98,16 @@ export const readExportDigest = (
     Effect.catchAll(() => Effect.succeed(null))
   );
 
-/** Read an Exported Video once and digest it. */
-const computeExportDigest = (
+/**
+ * Read an Exported Video once and digest it. Writes nothing: the caller
+ * decides whether the answer is worth a sidecar. `durationInSeconds` is only
+ * carried along — bytes alone cannot say how long a file plays for.
+ */
+export const digestExportFile = (
   fs: FileSystem.FileSystem,
   exportPath: string,
   durationInSeconds: number | null
-): Effect.Effect<ExportDigest, never, never> =>
+): Effect.Effect<ExportDigest, PlatformError> =>
   Effect.gen(function* () {
     const sha256Hash = createHash("sha256");
     const bytes = yield* fs.stream(exportPath).pipe(
@@ -116,7 +121,7 @@ const computeExportDigest = (
       bytes,
       durationInSeconds,
     };
-  }).pipe(Effect.orDie);
+  });
 
 /**
  * The digest of the export on disk, taking it — and writing the sidecar that
@@ -171,11 +176,7 @@ export const ensureExportDigest = (
     }
     // A sidecar that is missing, torn, or disagrees with the file on disk is
     // an absent one. Replacing it costs one read, once.
-    const digest = yield* computeExportDigest(
-      fs,
-      exportPath,
-      durationInSeconds
-    );
+    const digest = yield* digestExportFile(fs, exportPath, durationInSeconds);
     yield* writeExportDigest(fs, exportPath, digest);
     return digest;
   }).pipe(Effect.catchAll(() => Effect.succeed(null)));

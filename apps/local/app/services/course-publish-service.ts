@@ -18,7 +18,7 @@ import {
 import { validatePublishability as validatePublishabilityCore } from "./course-publish-readiness";
 import { findShippingVideos as findShippingVideosCore } from "./course-publish-video-roster";
 import {
-  DoesNotExistOnDbError,
+  CourseHasNoVersionError,
   ExportError,
   PublishCommitFailedError,
   PublishValidationError,
@@ -228,10 +228,9 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
         const latestVersion =
           yield* versionOps.getLatestCourseVersion(courseId);
         if (!latestVersion) {
-          return yield* new DoesNotExistOnDbError({
-            type: "section",
-            path: "",
-            message: `No version found for repo ${courseId}`,
+          return yield* new CourseHasNoVersionError({
+            courseId,
+            message: `No version found for course ${courseId}`,
           });
         }
         // The commit state is authoritative: re-sync the newest Published
