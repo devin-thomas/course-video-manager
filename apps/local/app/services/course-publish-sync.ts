@@ -25,9 +25,10 @@ import { createShipVideo, type VideoEntry } from "./course-publish-ship-video";
 import { ensureExportDigest } from "./export-sha256-sidecar";
 
 /**
- * The handoff for a sync with no export phase in front of it — the manual
- * re-sync of an already-Published Version. Every Video's bytes are either on
- * disk already or missing, and no latch will ever change that.
+ * The handoff for a sync with no export phase in front of it. Every Video's
+ * bytes are either on disk already or missing, and no latch will ever change
+ * that. Publish always has an export phase; only tests drive the sync this way
+ * now that the manual re-sync route is gone.
  */
 export const noExportPhase = (): Effect.Effect<void, ExportError> =>
   Effect.void;
@@ -51,7 +52,7 @@ export const syncFrozenCourseVersionToRemote = Effect.fn(
    *
    * Required rather than optional: omitting it would silently mean "every
    * Video is ready", i.e. upload-before-export, which is a race rather than a
-   * type error. The manual re-sync path says so explicitly with
+   * type error. A sync with no export phase says so explicitly with
    * `noExportPhase`.
    */
   awaitVideoReady: (videoId: string) => Effect.Effect<void, ExportError>;

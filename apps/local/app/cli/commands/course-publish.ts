@@ -182,8 +182,7 @@ FAILURE HANDLING
 FLAGS
   --name <vX.Y.Z>     (required) the Published Version name.
   --description <text> (required) description for the Published Version.
-  --exclude-todo      withhold to-do Lessons (default ships every Lesson, matching
-                      the standalone re-sync).
+  --exclude-todo      withhold to-do Lessons (default ships every Lesson).
 
 OUTPUT
   One pretty JSON object: { publishedVersionId, newDraftVersionId, name,

@@ -29,11 +29,3 @@ export class PublishCommitFailedError extends Data.TaggedError(
 export class ExportError extends Data.TaggedError("ExportError")<{
   message: string;
 }> {}
-
-/** A Course with no Course Version at all — there is nothing to sync. */
-export class CourseHasNoVersionError extends Data.TaggedError(
-  "CourseHasNoVersionError"
-)<{
-  courseId: string;
-  message: string;
-}> {}

@@ -24,6 +24,7 @@ import { LinkAuthOperationsService } from "@/services/db-link-auth-operations.se
 import { DrizzleService } from "@/services/drizzle-service.server";
 import { VideoProcessingService } from "@/services/video-processing-service";
 import { CoursePublishService } from "@/services/course-publish-service";
+import { syncCourseVersion } from "@/test-utils/sync-course-version";
 import {
   computeExportHash,
   resolveExportPath,
@@ -266,14 +267,13 @@ function getManifestVideos(doc: any): Array<{ relativePath: string }> {
   );
 }
 
-describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
+describe("syncing a frozen Course Version to Google Drive", () => {
   it("uploads video files to Google Drive", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true);
+        yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -285,12 +285,11 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   });
 
   it("uploads videos for all lessons", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true);
+        yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -304,13 +303,12 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   });
 
   it("verifies existing bundle integrity via sha256 + size", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     // First sync creates the bundle.
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true);
+        yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -318,8 +316,7 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
     const callsBefore = fakeDrive.calls.length;
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true);
+        yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -332,12 +329,11 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   });
 
   it("rejects bundle corruption without moving the commit marker", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true);
+        yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -352,8 +348,7 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
     await expect(
       run(
         Effect.gen(function* () {
-          const svc = yield* CoursePublishService;
-          yield* svc.syncPublishedVersion(course.id, true);
+          yield* syncCourseVersion(course.id, version.id, true);
         })
       )
     ).rejects.toBeDefined();
@@ -364,12 +359,11 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   });
 
   it("writes only .mp4, course.json, manifest.json, and course.schema.json — no authoring sidecars", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true);
+        yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -392,13 +386,12 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   });
 
   it("emits per-lesson progress events", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     const events: Array<{ event: string; data: unknown }> = [];
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true, (event, data) => {
+        yield* syncCourseVersion(course.id, version.id, true, (event, data) => {
           events.push({ event, data });
         });
       })
@@ -411,7 +404,7 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   });
 
   it("returns missingVideos without writing an incomplete manifest", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     const files = fs.readdirSync(finishedVideosDir);
     for (const file of files) {
@@ -420,8 +413,7 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
 
     const result = await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        return yield* svc.syncPublishedVersion(course.id, true);
+        return yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -434,8 +426,7 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
 
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true);
+        yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -450,12 +441,11 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   });
 
   it("course.json contains no path field", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true);
+        yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -468,12 +458,11 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   });
 
   it("course.json uses lineageId as correlation id", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true);
+        yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -485,12 +474,11 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   });
 
   it("course.json includes the render-input hash and exported byte receipt", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true);
+        yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -504,7 +492,7 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   });
 
   it("does not resolve or publish archived videos", async () => {
-    const { course, video2, run } = await setupSync();
+    const { course, version, video2, run } = await setupSync();
     await testDb
       .update(clipsTable)
       .set({ sourceEndTime: 99 })
@@ -516,8 +504,7 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
 
     const result = await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        return yield* svc.syncPublishedVersion(course.id, true);
+        return yield* syncCourseVersion(course.id, version.id, true);
       })
     );
 
@@ -530,12 +517,11 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   // ── Withholding to-do lessons (includeTodoLessons = false) ──────────
 
   it("withholds a to-do lesson's folder and omits it from course.json", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, false);
+        yield* syncCourseVersion(course.id, version.id, false);
       })
     );
 
@@ -552,13 +538,12 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
   });
 
   it("keeps the prior immutable bundle when a later manifest withholds a to-do lesson", async () => {
-    const { course, run } = await setupSync();
+    const { course, version, run } = await setupSync();
 
     // First publish includes the to-do lesson.
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, true);
+        yield* syncCourseVersion(course.id, version.id, true);
       })
     );
     const firstDoc = getRemoteManifest();
@@ -571,8 +556,7 @@ describe("CoursePublishService.syncPublishedVersion (Google Drive)", () => {
     // A later publish withholds it.
     await run(
       Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        yield* svc.syncPublishedVersion(course.id, false);
+        yield* syncCourseVersion(course.id, version.id, false);
       })
     );
     const secondDoc = getRemoteManifest();

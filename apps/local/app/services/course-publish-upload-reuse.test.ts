@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import { Effect } from "effect";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
-import { CoursePublishService } from "@/services/course-publish-service";
+import { syncCourseVersion } from "@/test-utils/sync-course-version";
 import { isCopyRequest } from "@/test-utils/fake-google-drive";
 import {
   RECEIPT_PATH,
@@ -37,18 +37,7 @@ const syncFrozen = (
   courseId: string,
   versionId: string,
   onProgress?: (event: "progress", data: { percentage: number }) => void
-) =>
-  run(
-    Effect.gen(function* () {
-      const svc = yield* CoursePublishService;
-      return yield* svc.syncFrozenVersion(
-        courseId,
-        versionId,
-        true,
-        onProgress
-      );
-    })
-  );
+) => run(syncCourseVersion(courseId, versionId, true, onProgress));
 
 describe("publish upload — reuse from the previous Bundle", () => {
   it("copies unchanged Videos inside Drive rather than sending them again", async () => {

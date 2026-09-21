@@ -36,6 +36,7 @@ import { LinkAuthOperationsService } from "@/services/db-link-auth-operations.se
 import { DrizzleService } from "@/services/drizzle-service.server";
 import { VideoProcessingService } from "@/services/video-processing-service";
 import { CoursePublishService } from "@/services/course-publish-service";
+import { syncCourseVersion } from "@/test-utils/sync-course-version";
 import {
   computeExportHash,
   resolveExportPath,
@@ -206,7 +207,7 @@ export const setupUploads = async (opts?: {
   }
 
   // Cloning a fresh Draft leaves the seeded version Published, which is what
-  // `syncPublishedVersion` re-commits.
+  // `sync` re-commits.
   await runDb(
     Effect.gen(function* () {
       const versionOps = yield* VersionOperationsService;
@@ -262,14 +263,7 @@ export const setupUploads = async (opts?: {
     includeTodoLessons = true
   ) =>
     run(
-      Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        return yield* svc.syncPublishedVersion(
-          course.id,
-          includeTodoLessons,
-          onProgress
-        );
-      })
+      syncCourseVersion(course.id, version.id, includeTodoLessons, onProgress)
     );
 
   return { course, version, videos, run, sync };

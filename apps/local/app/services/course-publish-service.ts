@@ -18,15 +18,11 @@ import {
 import { validatePublishability as validatePublishabilityCore } from "./course-publish-readiness";
 import { findShippingVideos as findShippingVideosCore } from "./course-publish-video-roster";
 import {
-  CourseHasNoVersionError,
   ExportError,
   PublishCommitFailedError,
   PublishValidationError,
 } from "./course-publish-errors";
-import {
-  noExportPhase,
-  syncFrozenCourseVersionToRemote,
-} from "./course-publish-sync";
+import { syncFrozenCourseVersionToRemote } from "./course-publish-sync";
 import {
   runObservedExportLoop,
   type EmitPublishDetailEvent,
@@ -50,20 +46,6 @@ export type VideoForExport = {
   }>;
 };
 
-// The manual re-sync surface only ever reports the bundle-wide upload
-// percentage — the per-Video task events belong to a Publish, which is the
-// only caller that has an export phase to interleave them with.
-type SyncProgressCallback = (
-  event: "progress",
-  data: { percentage: number }
-) => void;
-
-const onlyBundleProgress =
-  (onProgress?: SyncProgressCallback): EmitPublishDetailEvent =>
-  (e) => {
-    if (e.event === "progress") onProgress?.("progress", e.data);
-  };
-
 export type PublishOptions = {
   courseId: string;
   versionName: string;
@@ -85,7 +67,7 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
       const versionOps = yield* VersionOperationsService;
       const effectFs = yield* FileSystem.FileSystem;
       // CVM is a single local operator process. Serialize every Course Version
-      // lifecycle mutation so publish, manual sync, and create-version cannot
+      // lifecycle mutation so publish and create-version cannot
       // interleave around the database freeze and the Commit receipt.
       const courseVersionMutationSemaphore = yield* Effect.makeSemaphore(1);
       const FINISHED_VIDEOS_DIRECTORY = yield* Config.string(
@@ -217,39 +199,6 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
           );
         }
       );
-
-      const syncPublishedVersionUnlocked = Effect.fn(
-        "syncPublishedVersionUnlocked"
-      )(function* (
-        courseId: string,
-        includeTodoLessons: boolean,
-        onProgress?: SyncProgressCallback
-      ) {
-        const latestVersion =
-          yield* versionOps.getLatestCourseVersion(courseId);
-        if (!latestVersion) {
-          return yield* new CourseHasNoVersionError({
-            courseId,
-            message: `No version found for course ${courseId}`,
-          });
-        }
-        // The commit state is authoritative: re-sync the newest Published
-        // Version. (Previously inferred positionally as "first non-latest".)
-        const latestPublishedVersion =
-          yield* versionOps.getLatestPublishedVersion(courseId);
-        if (!latestPublishedVersion) {
-          return yield* new PublishValidationError({
-            unfrozenCourseVersionId: latestVersion.id,
-          });
-        }
-        return yield* syncFrozenCourseVersionToRemote({
-          courseId,
-          courseVersionId: latestPublishedVersion.id,
-          includeTodoLessons,
-          onDetailEvent: onlyBundleProgress(onProgress),
-          awaitVideoReady: noExportPhase,
-        });
-      });
 
       const publishUnlocked = Effect.fn("publishUnlocked")(function* (
         options: PublishOptions
@@ -479,33 +428,6 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
         };
       });
 
-      const syncFrozenVersion = Effect.fn("syncFrozenVersion")(function* (
-        courseId: string,
-        courseVersionId: string,
-        includeTodoLessons: boolean,
-        onProgress?: SyncProgressCallback
-      ) {
-        return yield* courseVersionMutationSemaphore.withPermits(1)(
-          syncFrozenCourseVersionToRemote({
-            courseId,
-            courseVersionId,
-            includeTodoLessons,
-            onDetailEvent: onlyBundleProgress(onProgress),
-            awaitVideoReady: noExportPhase,
-          })
-        );
-      });
-
-      const syncPublishedVersion = Effect.fn("syncPublishedVersion")(function* (
-        courseId: string,
-        includeTodoLessons: boolean,
-        onProgress?: SyncProgressCallback
-      ) {
-        return yield* courseVersionMutationSemaphore.withPermits(1)(
-          syncPublishedVersionUnlocked(courseId, includeTodoLessons, onProgress)
-        );
-      });
-
       const publish = Effect.fn("publish")(function* (options: PublishOptions) {
         return yield* courseVersionMutationSemaphore.withPermits(1)(
           publishUnlocked(options)
@@ -530,8 +452,6 @@ export class CoursePublishService extends Effect.Service<CoursePublishService>()
         isExported,
         resolveExportPath,
         validatePublishability,
-        syncFrozenVersion,
-        syncPublishedVersion,
         publish,
         createDraftVersion,
       };

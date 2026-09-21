@@ -8,7 +8,6 @@ import { VideoProcessingService } from "@/services/video-processing-service";
 import { CoursePublishService } from "@/services/course-publish-service";
 import { isSmallFileCreate } from "@/test-utils/fake-google-drive";
 import {
-  COURSE_DIR,
   fakeDrive,
   finishedVideosDir,
   setupPublishServiceTests,
@@ -220,33 +219,6 @@ describe("CoursePublishService — publish", () => {
       name: "",
       commitState: "draft",
     });
-  });
-
-  it("re-syncs the newest Published Version by commit state", async () => {
-    const { course, run } = await setup();
-
-    const result = await run(
-      Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        const outcome = yield* svc.publish({
-          courseId: course.id,
-          versionName: "v1.0",
-          versionDescription: "First release",
-          includeTodoLessons: false,
-        });
-        // Delete the remote receipt, then re-sync.
-        fakeDrive.remove(`${COURSE_DIR}/course.json`);
-        const retry = yield* svc.syncPublishedVersion(course.id, false);
-        const stored = fakeDrive.fileAt(`${COURSE_DIR}/course.json`);
-        const manifest = JSON.parse(stored!.content.toString("utf-8"));
-        return { outcome, retry, manifest };
-      })
-    );
-
-    expect(result.retry.missingVideos).toEqual([]);
-    expect(result.manifest.courseVersionId).toBe(
-      result.outcome.publishedVersionId
-    );
   });
 
   it("fails with PublishValidationError when export fails after retries", async () => {

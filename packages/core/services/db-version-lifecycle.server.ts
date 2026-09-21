@@ -5,7 +5,7 @@ import {
   UnknownDBServiceError,
   VersionNotPendingError,
 } from "./db-service-errors.js";
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Effect } from "effect";
 
 const makeDbCall = <T>(fn: () => Promise<T>) =>
@@ -104,21 +104,6 @@ export const createVersionLifecycleOps = (db: Database) => {
     return version;
   });
 
-  /** The newest Published Version of a course, by commit state — not position. */
-  const getLatestPublishedVersion = Effect.fn("getLatestPublishedVersion")(
-    function* (repoId: string) {
-      return yield* makeDbCall(() =>
-        db.query.courseVersions.findFirst({
-          where: and(
-            eq(courseVersions.repoId, repoId),
-            eq(courseVersions.commitState, "published")
-          ),
-          orderBy: desc(courseVersions.createdAt),
-        })
-      );
-    }
-  );
-
   /** The course's Pending Version, if one exists (at most one per course). */
   const getPendingVersion = Effect.fn("getPendingVersion")(function* (
     repoId: string
@@ -136,7 +121,6 @@ export const createVersionLifecycleOps = (db: Database) => {
   return {
     promotePendingVersion,
     discardPendingVersion,
-    getLatestPublishedVersion,
     getPendingVersion,
   };
 };

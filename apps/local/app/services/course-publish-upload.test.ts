@@ -12,10 +12,9 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { Effect } from "effect";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
-import { CoursePublishService } from "@/services/course-publish-service";
+import { syncCourseVersion } from "@/test-utils/sync-course-version";
 import {
   COURSE_DIR,
   RECEIPT_PATH,
@@ -161,12 +160,7 @@ describe("publish upload — the Commit receipt", () => {
     const firstVersionId = receiptManifest().courseVersionId;
 
     const secondVersionId = await freezeLatestVersion(course, run);
-    await run(
-      Effect.gen(function* () {
-        const svc = yield* CoursePublishService;
-        return yield* svc.syncFrozenVersion(course.id, secondVersionId, true);
-      })
-    );
+    await run(syncCourseVersion(course.id, secondVersionId, true));
 
     const receipts = fakeDrive.filePaths().filter((p) => p === RECEIPT_PATH);
     expect(receipts).toHaveLength(1);
