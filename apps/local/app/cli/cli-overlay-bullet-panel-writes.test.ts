@@ -11,6 +11,10 @@ import {
 import { ClipOperationsService } from "@/services/db-clip-operations.server";
 import { DrizzleService } from "@/services/drizzle-service.server";
 import {
+  BULLET_PANEL_ANIMATION_IN_SECONDS,
+  lastBulletRevealAtInSeconds,
+} from "@/features/videos/bullet-panel";
+import {
   buildWriteLayer,
   makeRun,
   one,
@@ -78,6 +82,22 @@ const bulletsFile = (payload: unknown): string => {
   writeFileSync(path, JSON.stringify(payload), "utf8");
   return path;
 };
+
+// The reveal-time boundaries of a 5s panel, read from the domain's own ease
+// rather than spelled as numbers: the ease is retuned by eye (it was 0.35s
+// when these cases were written, and is the camera's 0.8s now), and a
+// hard-coded boundary silently turns an "accepted" case into a refused one.
+const EASE = BULLET_PANEL_ANIMATION_IN_SECONDS;
+const SHORT_PANEL_SECONDS = 5;
+/** The last reveal a 5s panel accepts while it eases out. */
+const LAST_REVEAL_WITH_EXIT = lastBulletRevealAtInSeconds({
+  durationInSeconds: SHORT_PANEL_SECONDS,
+});
+/**
+ * Half an ease past that: too late while the panel eases out, yet inside the
+ * whole extra ease a cut exit gives back.
+ */
+const LATE_REVEAL = LAST_REVEAL_WITH_EXIT + EASE / 2;
 
 const THREE_BULLETS: Bullet[] = [
   { icon: "target", text: "Name the problem", revealAt: 0 },
@@ -227,15 +247,16 @@ describe("overlay add --kind bulletPanel", () => {
   it("refuses a reveal time with no room left to ease in", async () => {
     const clip = await seedClip(s.standaloneActiveId, { start: 0, end: 20 });
 
-    // The Overlay is 5s long, a bullet takes 0.35s to arrive and the panel
-    // spends its last 0.35s leaving, so anything after 4.3s is still easing in
-    // as the panel eases out.
+    // The Overlay is 5s long, a bullet takes one ease to arrive and the panel
+    // spends its last ease leaving, so anything later than two eases before
+    // the end is still easing in as the panel eases out.
+    expect(LAST_REVEAL_WITH_EXIT).toBeCloseTo(SHORT_PANEL_SECONDS - 2 * EASE);
     expectRefused(
       await addPanel(
         clip.id,
-        [{ icon: "target", text: "Too late", revealAt: 4.65 }],
+        [{ icon: "target", text: "Too late", revealAt: LATE_REVEAL }],
         [],
-        "5"
+        String(SHORT_PANEL_SECONDS)
       )
     );
     // The last moment that does fit is accepted.
@@ -243,9 +264,15 @@ describe("overlay add --kind bulletPanel", () => {
       (
         await addPanel(
           clip.id,
-          [{ icon: "target", text: "Just fits", revealAt: 4.3 }],
+          [
+            {
+              icon: "target",
+              text: "Just fits",
+              revealAt: LAST_REVEAL_WITH_EXIT,
+            },
+          ],
           [],
-          "5"
+          String(SHORT_PANEL_SECONDS)
         )
       ).exitCode
     ).toBe(0);
@@ -260,9 +287,9 @@ describe("overlay add --kind bulletPanel", () => {
       (
         await addPanel(
           clip.id,
-          [{ icon: "target", text: "Still fits", revealAt: 4.65 }],
+          [{ icon: "target", text: "Still fits", revealAt: LATE_REVEAL }],
           ["--disable-exit-animation", "true"],
-          "5"
+          String(SHORT_PANEL_SECONDS)
         )
       ).exitCode
     ).toBe(0);
@@ -493,14 +520,14 @@ describe("overlay update --bullets-json", () => {
 
   it("re-validates them when the exit animation is turned back on", async () => {
     const clip = await seedClip(s.standaloneActiveId, { start: 0, end: 20 });
-    // 4.65s fits a 5s panel only while its exit is a cut.
+    // LATE_REVEAL fits a 5s panel only while its exit is a cut.
     const created = one<OverlayRow>(
       (
         await addPanel(
           clip.id,
-          [{ icon: "target", text: "Late", revealAt: 4.65 }],
+          [{ icon: "target", text: "Late", revealAt: LATE_REVEAL }],
           ["--disable-exit-animation", "true"],
-          "5"
+          String(SHORT_PANEL_SECONDS)
         )
       ).stdout
     );
