@@ -439,3 +439,21 @@ _Avoid_: Offline command, Machine command, Disabled command
 **Schema Version**:
 The number of Drizzle migrations a checkout was built against, stated by `cvm` on every request and compared by the deployed API against its own. Any difference is refused outright, naming both numbers and telling the caller to pull — an out-of-date box cannot write against a schema it does not understand. Migrations are applied by the `apps/remote` deploy alone, and are additive-only, so a `cvm` already in flight when one lands keeps working.
 _Avoid_: API version, Migration number, Protocol version
+
+### AFK agent platform
+
+**Agent Runner**:
+The pluggable process described by the Agent-Runner Contract (platform spec §3.8). It is handed inputs (environment variables and pre-fetched context), does work in a git checkout, and writes output files to a directory. The orchestrator — GitHub Actions — owns every tracker and VCS mutation; the runner only emits files. In local (non-CI) runs this separation is relaxed: the runner may use `gh` and `git` directly.
+_Avoid_: Agent, Bot (unqualified)
+
+**Agent Provider**:
+The concrete vendor implementation that the **Agent Runner** delegates to. Each provider wraps a vendor CLI (`claude`, `codex`, `agy`, `cursor`) behind the `AgentProvider` interface from `@ai-hero/sandcastle`: it builds the headless command, parses the vendor's stream format, and optionally captures session state for resume. The provider is selected by `.sandcastle/config.json` and overridable per-run.
+_Avoid_: Backend, Driver, Adapter
+
+**Vendor**:
+One of the supported coding-agent CLI tools: Claude Code, OpenAI Codex, Google Antigravity (`agy`), or Cursor. Each vendor authenticates through its own credential store and draws from its own subscription allowance. The harness treats all vendors as equals — no vendor is limited to a subset of jobs.
+_Avoid_: Tool (unqualified), Service, Platform (in this context)
+
+**Run Verdict**:
+The harness's determination of whether an AFK job succeeded. Computed from three independent signals: the process exit code, the presence and schema-validity of structured output, and ground-truth assertions (e.g. `git rev-list --count` confirming commits exist). All three must agree; exit code alone is never sufficient.
+_Avoid_: Result, Status, Outcome (unqualified)
