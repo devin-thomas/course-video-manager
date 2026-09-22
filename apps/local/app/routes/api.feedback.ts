@@ -7,6 +7,9 @@ import { generateText } from "ai";
 
 const execFileAsync = promisify(execFile);
 
+/** This fork's own tracker: feedback must never be filed on upstream. */
+const FEEDBACK_REPO = "devin-thomas/course-video-manager";
+
 export const action = async (args: Route.ActionArgs) => {
   const formData = await args.request.formData();
   const description = formData.get("description");
@@ -42,13 +45,11 @@ export const action = async (args: Route.ActionArgs) => {
       "issue",
       "create",
       "--repo",
-      "mattpocock/course-video-manager",
+      FEEDBACK_REPO,
       "--title",
       title,
       "--body",
       body,
-      "--label",
-      "agent:implement",
     ]);
 
     // Count open issues to show in the toast
@@ -58,7 +59,7 @@ export const action = async (args: Route.ActionArgs) => {
         "issue",
         "list",
         "--repo",
-        "mattpocock/course-video-manager",
+        FEEDBACK_REPO,
         "--state",
         "open",
         "--json",
