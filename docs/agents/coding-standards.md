@@ -1,3 +1,5 @@
+# Coding standards
+
 Wherever possible, use Effect primitives like `FileSystem` over promises. This is so that we can make use of DI and type-safe errors from Effect. However, Effect should not leak out into the user-facing API.
 
 ---

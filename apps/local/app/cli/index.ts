@@ -17,7 +17,7 @@ import { searchCommand } from "./commands/search";
 
 /**
  * Top-level `cvm --help` text. This is a DOMAIN-TEACHING document — keep it in
- * sync with CONTEXT.md by hand (see the pointer added to CLAUDE.md). It teaches
+ * sync with CONTEXT.md by hand (see the rule in AGENTS.md). It teaches
  * the domain model, addressing, and version conventions; each noun/verb adds
  * its own ubiquitous-language help.
  */

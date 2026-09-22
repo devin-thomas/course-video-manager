@@ -107,7 +107,7 @@ pnpm run typecheck
 ```
 
 There are deliberately **no tests against the render output** — see the Testing
-section of `.sandcastle/CODING_STANDARDS.md`. `pnpm run studio` is how a
+section of `docs/agents/coding-standards.md`. `pnpm run studio` is how a
 branding change is checked.
 
 ## Transparency
