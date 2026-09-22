@@ -22,7 +22,8 @@ If you're touching frontend code with complex state (creating/modifying reducers
 Run each check, fix issues, and re-run until clean. Do these sequentially:
 
 1. **Type checking**: `pnpm run typecheck`
-2. **Tests**: `pnpm test`
+2. **Boundaries**: `pnpm run lint:boundaries`
+3. **Tests**: only the test file(s) that cover your change — `pnpm --filter <package> test -- path/to/thing.test.ts`. Don't run a package's full suite by hand; CI runs everything (see `docs/agents/testing.md`).
 
 If a check fails, fix the issue and re-run that check before moving to the next one. Do not move on with failing checks.
 

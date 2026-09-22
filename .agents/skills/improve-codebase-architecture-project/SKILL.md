@@ -33,7 +33,7 @@ Use `CONTEXT.md` vocabulary for **domain** language. Do not re-litigate decision
 ### 1. Read prior proposals
 
 ```bash
-gh issue list --label "source:architecture-review" --state all --limit 200 \
+gh issue list -R devin-thomas/course-video-manager --label "source:architecture-review" --state all --limit 200 \
   --json number,title,body,state,labels
 ```
 
