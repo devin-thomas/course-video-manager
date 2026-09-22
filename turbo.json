@@ -35,7 +35,12 @@
       "persistent": true
     },
     "//#test:root": {
-      "inputs": [".sandcastle/**", "vitest.config.ts"],
+      "inputs": [
+        ".sandcastle/**",
+        "tests/**",
+        "scripts/agent-hooks/**",
+        "vitest.config.ts"
+      ],
       "outputs": []
     },
     "//#typecheck:root": {
