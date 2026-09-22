@@ -49,9 +49,6 @@
       ]
     }
   },
-  "lint-staged": {
-    "*": "prettier --write"
-  },
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.10.0",
     "@types/node": "^20",
