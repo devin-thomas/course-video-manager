@@ -39,6 +39,10 @@ const ISSUE_NUMBER = issueMatch?.[1] ?? "";
 const ISSUE_TITLE = ISSUE_NUMBER
   ? safeSh(`gh issue view ${ISSUE_NUMBER} --json title --jq .title`).trim()
   : "";
+const ISSUE_BODY = ISSUE_NUMBER
+  ? safeSh(`gh issue view ${ISSUE_NUMBER} --comments`).trim()
+  : "";
+const DIFF = sh("git diff main..HEAD --stat").trim();
 
 const reviewsJson = sh(
   `gh api repos/{owner}/{repo}/pulls/${PR_NUMBER}/reviews`
@@ -171,6 +175,8 @@ const result = await runWithExtraction({
     BRANCH,
     ISSUE_NUMBER: ISSUE_NUMBER || "(none)",
     ISSUE_TITLE: ISSUE_TITLE || "(no linked issue)",
+    ISSUE_BODY: ISSUE_BODY || "(no linked issue)",
+    DIFF,
     PR_COMMENTS_JSON: JSON.stringify(prComments, null, 2),
   },
   output: sandcastle.Output.object({

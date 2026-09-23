@@ -48,6 +48,10 @@ const PromptOutput = z.object({
   comment: z.string().min(1),
 });
 
+const PR_VIEW = sh(`gh pr view ${PR_NUMBER}`).trim();
+const MERGE_STATUS = sh("git status").trim();
+const CONFLICTING_FILES = mergeResult.conflicts.join("\n");
+
 const result = await runWithExtraction({
   name: `update-branch-pr-${PR_NUMBER}`,
   agent: provider,
@@ -58,6 +62,9 @@ const result = await runWithExtraction({
     PR_NUMBER,
     BRANCH,
     BASE_REF,
+    PR_VIEW,
+    MERGE_STATUS,
+    CONFLICTING_FILES,
   },
   output: sandcastle.Output.object({
     tag: "output",

@@ -26,6 +26,6 @@ Before committing, run `pnpm run typecheck` and `pnpm run test`.
 
 # COMMIT
 
-Make one or more git commits on `{{BRANCH}}`. Use conventional-commit messages (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`). Do NOT use a `RALPH:` prefix — that prefix is reserved for the RALPH loop.
+Make one or more git commits on `{{BRANCH}}`. Use conventional-commit messages (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`).
 
 Do not close the issue yourself.
