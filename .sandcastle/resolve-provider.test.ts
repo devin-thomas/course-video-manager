@@ -35,10 +35,10 @@ describe("resolveProvider", () => {
     expect(provider.name).toBe("cursor");
   });
 
-  it("throws not-yet-implemented for the antigravity config", () => {
-    expect(() => resolveProvider(config({ provider: "antigravity" }))).toThrow(
-      /antigravity.*not yet implemented/
-    );
+  it("returns an antigravity AgentProvider for the antigravity config", () => {
+    const provider = resolveProvider(config({ provider: "antigravity" }));
+
+    expect(provider.name).toBe("antigravity");
   });
 
   it("throws naming the valid providers for an unrecognized provider", () => {

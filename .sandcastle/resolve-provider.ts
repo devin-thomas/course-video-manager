@@ -1,6 +1,7 @@
 import * as sandcastle from "@ai-hero/sandcastle";
 import type { AgentProvider } from "@ai-hero/sandcastle";
 import { SANDCASTLE_PROVIDERS, type SandcastleConfig } from "./resolve-config";
+import { AntigravityProvider } from "./providers/antigravity";
 
 /**
  * Map a resolved {@link SandcastleConfig} to a Sandcastle `AgentProvider`
@@ -26,9 +27,7 @@ export function resolveProvider(config: SandcastleConfig): AgentProvider {
         env: credentialEnv("CURSOR_API_KEY"),
       });
     case "antigravity":
-      throw new Error(
-        'Sandcastle provider "antigravity" is not yet implemented — see issue #4 (Build the Antigravity AgentProvider).'
-      );
+      return new AntigravityProvider(model, { env: {} });
     default:
       throw new Error(
         `Unknown Sandcastle provider "${provider as string}". Valid providers: ${SANDCASTLE_PROVIDERS.join(", ")}.`
