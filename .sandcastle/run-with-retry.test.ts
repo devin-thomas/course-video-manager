@@ -16,7 +16,7 @@ const output = Output.object({ tag: "output", schema });
 function baseOptions() {
   return {
     name: "test-run",
-    agent: {} as never,
+    agent: { name: "claude-code" } as never,
     sandbox: {} as never,
     promptFile: "/repo/prompt.md",
     output,
@@ -24,6 +24,17 @@ function baseOptions() {
 }
 
 function successResult(value: string) {
+  return {
+    iterations: [{ sessionId: "sess-1" }],
+    stdout: "stdout",
+    commits: [{ sha: "abc123" }],
+    branch: "feat/x",
+    output: { value },
+  } as never;
+}
+
+/** Same shape as {@link successResult}, but `output.value` fails the schema. */
+function wrongTypeResult(value: unknown) {
   return {
     iterations: [{ sessionId: "sess-1" }],
     stdout: "stdout",
@@ -159,13 +170,45 @@ describe("runWithRetry", () => {
     expect(mockRun).toHaveBeenCalledTimes(1);
   });
 
-  it("throws a clear error when the failed run carried no sessionId", async () => {
+  it("throws a clear error naming the active provider when the failed run carried no sessionId", async () => {
     mockRun.mockRejectedValueOnce(
       structuredError('{"a":1}', { sessionId: undefined })
     );
 
-    await expect(runWithRetry(baseOptions())).rejects.toThrow(/no sessionId/);
+    await expect(
+      runWithRetry({ ...baseOptions(), agent: { name: "codex" } as never })
+    ).rejects.toThrow(/no sessionId.*"codex" provider/s);
     // Initial call only — we can't resume without a sessionId.
     expect(mockRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries when the harness-side schema re-check fails even though run() itself resolved", async () => {
+    // run() resolves normally — Sandcastle's own per-vendor extraction didn't
+    // catch the bad type — but the value fails the real zod schema.
+    mockRun
+      .mockResolvedValueOnce(wrongTypeResult(123))
+      .mockResolvedValueOnce(successResult("recovered"));
+
+    const result = await runWithRetry(baseOptions());
+
+    expect(result.output).toEqual({ value: "recovered" });
+    expect(mockRun).toHaveBeenCalledTimes(2);
+
+    const retryCall = mockRun.mock.calls[1]![0];
+    expect(retryCall.resumeSession).toBe("sess-1");
+    const retryPrompt = retryCall.prompt as string;
+    expect(retryPrompt).toContain("Previous attempt failed");
+  });
+
+  it("rethrows a StructuredOutputError after exhausting attempts on persistent harness-side validation failures", async () => {
+    mockRun
+      .mockResolvedValueOnce(wrongTypeResult(1))
+      .mockResolvedValueOnce(wrongTypeResult(2))
+      .mockResolvedValueOnce(wrongTypeResult(3));
+
+    await expect(runWithRetry(baseOptions())).rejects.toBeInstanceOf(
+      StructuredOutputError
+    );
+    expect(mockRun).toHaveBeenCalledTimes(3);
   });
 });
