@@ -13,7 +13,8 @@ import { resolveProvider } from "../resolve-provider";
 const PR_NUMBER = required("PR_NUMBER");
 const BRANCH = required("BRANCH");
 const OUTPUT_DIR = process.env.OUTPUT_DIR ?? "/tmp";
-const provider = resolveProvider(resolveConfig());
+const config = resolveConfig();
+const provider = resolveProvider(config);
 
 const PrView = z.object({
   title: z.string(),
@@ -42,7 +43,7 @@ const ISSUE_TITLE = ISSUE_NUMBER
 const ISSUE_BODY = ISSUE_NUMBER
   ? safeSh(`gh issue view ${ISSUE_NUMBER} --comments`).trim()
   : "";
-const DIFF = sh("git diff main..HEAD --stat").trim();
+const DIFF = sh(`git diff ${config.baseBranch}..HEAD --stat`).trim();
 
 const reviewsJson = sh(
   `gh api repos/{owner}/{repo}/pulls/${PR_NUMBER}/reviews`
@@ -192,7 +193,9 @@ const result = await runWithExtraction({
 const verdict = result.commits.length > 0 ? "improved" : "clean";
 
 const headSha = sh("git rev-parse HEAD").trim();
-const diffLines = parseDiffLines(safeSh("git diff main...HEAD"));
+const diffLines = parseDiffLines(
+  safeSh(`git diff ${config.baseBranch}...HEAD`)
+);
 const validInlineComments = result.output.inlineComments.filter((c) => {
   const fileLines = diffLines.get(c.path);
   if (!fileLines) {
