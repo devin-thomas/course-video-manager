@@ -59,12 +59,8 @@ describe("retry effect integration", () => {
     >();
 
     paramsMap.set("upload-1", {
-      type: "youtube",
-      params: {
-        description: "My desc",
-        privacyStatus: "unlisted",
-        thumbnailId: "thumb-1",
-      },
+      type: "render-vertical",
+      params: { body: "b", description: "My desc", slug: "post-1" },
     });
 
     const prev: uploadReducer.State["uploads"] = {
@@ -74,8 +70,8 @@ describe("retry effect integration", () => {
         title: "Test Video",
         progress: 50,
         status: "uploading",
-        uploadType: "youtube",
-        youtubeVideoId: null,
+        uploadType: "render-vertical",
+        renderVerticalStage: null,
         errorMessage: null,
         retryCount: 0,
         terminal: false,
@@ -109,7 +105,7 @@ describe("retry effect integration", () => {
       entry: uploadReducer.UploadEntry;
     }> = [
       {
-        uploadType: "youtube",
+        uploadType: "render-vertical",
         params: {
           description: "desc",
           privacyStatus: "public",
@@ -121,8 +117,8 @@ describe("retry effect integration", () => {
           title: "Test",
           progress: 30,
           status: "retrying" as const,
-          uploadType: "youtube" as const,
-          youtubeVideoId: null,
+          uploadType: "render-vertical" as const,
+          renderVerticalStage: null,
           errorMessage: "err",
           retryCount: 1,
           terminal: false,
@@ -131,7 +127,7 @@ describe("retry effect integration", () => {
         },
       },
       {
-        uploadType: "buffer",
+        uploadType: "publish",
         params: { caption: "hello" },
         entry: {
           uploadId: "u2",
@@ -139,8 +135,10 @@ describe("retry effect integration", () => {
           title: "Test",
           progress: 30,
           status: "retrying" as const,
-          uploadType: "buffer" as const,
-          bufferStage: "uploading-blob" as const,
+          uploadType: "publish" as const,
+          publishStage: null,
+          newDraftVersionId: null,
+          courseId: "course-1",
           errorMessage: "err",
           retryCount: 1,
           terminal: false,
@@ -149,7 +147,7 @@ describe("retry effect integration", () => {
         },
       },
       {
-        uploadType: "ai-hero",
+        uploadType: "render-vertical",
         params: { body: "content", description: "desc", slug: "slug" },
         entry: {
           uploadId: "u3",
@@ -157,8 +155,8 @@ describe("retry effect integration", () => {
           title: "Test",
           progress: 30,
           status: "retrying" as const,
-          uploadType: "ai-hero" as const,
-          aiHeroSlug: null,
+          uploadType: "render-vertical" as const,
+          renderVerticalStage: null,
           errorMessage: "err",
           retryCount: 1,
           terminal: false,
@@ -224,12 +222,8 @@ describe("dependency activation integration", () => {
     >();
 
     paramsMap.set("yt-1", {
-      type: "youtube",
-      params: {
-        description: "desc",
-        privacyStatus: "public",
-        thumbnailId: "thumb",
-      },
+      type: "render-vertical",
+      params: { body: "b", description: "desc", slug: "post-1" },
     });
 
     let state = createState();
@@ -242,9 +236,10 @@ describe("dependency activation integration", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "render-vertical",
       uploadId: "yt-1",
       videoId: "video-1",
-      title: "YouTube",
+      title: "AI Hero",
       dependsOn: "export-1",
     });
 
@@ -273,12 +268,8 @@ describe("dependency activation integration", () => {
     >();
 
     paramsMap.set("yt-1", {
-      type: "youtube",
-      params: {
-        description: "desc",
-        privacyStatus: "public",
-        thumbnailId: "thumb",
-      },
+      type: "render-vertical",
+      params: { body: "b", description: "desc", slug: "post-1" },
     });
 
     let state = createState();
@@ -291,9 +282,10 @@ describe("dependency activation integration", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "render-vertical",
       uploadId: "yt-1",
       videoId: "video-1",
-      title: "YouTube",
+      title: "AI Hero",
       dependsOn: "export-1",
     });
 
@@ -338,7 +330,7 @@ describe("dependency activation integration", () => {
       description: "desc",
       slug: "my-article",
     };
-    paramsMap.set("ah-1", { type: "ai-hero", params: aiHeroParams });
+    paramsMap.set("ah-1", { type: "render-vertical", params: aiHeroParams });
 
     let state = createState();
     state = reduce(state, {
@@ -353,7 +345,7 @@ describe("dependency activation integration", () => {
       uploadId: "ah-1",
       videoId: "video-1",
       title: "AI Hero",
-      uploadType: "ai-hero",
+      uploadType: "render-vertical",
       dependsOn: "export-1",
     });
 
@@ -422,10 +414,8 @@ describe("export retry with no stored params", () => {
 describe("registry completeness", () => {
   it("should have an entry for every upload type", () => {
     const allTypes: uploadReducer.UploadType[] = [
-      "youtube",
-      "buffer",
-      "ai-hero",
-      "skills-changelog",
+      "render-vertical",
+      "publish",
       "export",
       "publish",
     ];
@@ -450,21 +440,12 @@ describe("full integration: reducer + registry through lifecycle", () => {
       uploadId: "upload-1",
       videoId: "video-1",
       title: "My Upload",
-      uploadType: "buffer",
+      uploadType: "publish",
     });
 
     const started = state.uploads["upload-1"]!;
-    expect(started.uploadType).toBe("buffer");
-    expect(started.uploadType === "buffer" && started.bufferStage).toBe(
-      "uploading-blob"
-    );
+    expect(started.uploadType).toBe("publish");
     expect(started.status).toBe("uploading");
-
-    state = reduce(state, {
-      type: "UPDATE_BUFFER_STAGE",
-      uploadId: "upload-1",
-      stage: "creating-post",
-    });
 
     state = reduce(state, {
       type: "UPLOAD_ERROR",
@@ -476,9 +457,7 @@ describe("full integration: reducer + registry through lifecycle", () => {
     state = reduce(state, { type: "RETRY", uploadId: "upload-1" });
     const retried = state.uploads["upload-1"]!;
     expect(retried.status).toBe("uploading");
-    expect(retried.uploadType === "buffer" && retried.bufferStage).toBe(
-      "uploading-blob"
-    );
+    expect(retried.status).toBe("uploading");
     expect(retried.progress).toBe(0);
 
     state = reduce(state, {
@@ -487,10 +466,10 @@ describe("full integration: reducer + registry through lifecycle", () => {
     });
     const success = state.uploads["upload-1"]!;
     expect(success.status).toBe("success");
-    expect(success.uploadType === "buffer" && success.bufferStage).toBeNull();
+    expect(success.uploadType).toBe("publish");
   });
 
-  it("should handle dependency chain: export → youtube with type-specific fields via registry", () => {
+  it("should handle dependency chain: export → post with type-specific fields via registry", () => {
     let state = createState();
 
     state = reduce(state, {
@@ -502,9 +481,10 @@ describe("full integration: reducer + registry through lifecycle", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "render-vertical",
       uploadId: "yt-1",
       videoId: "video-1",
-      title: "YouTube Upload",
+      title: "AI Hero Post",
       dependsOn: "export-1",
     });
 
@@ -515,7 +495,7 @@ describe("full integration: reducer + registry through lifecycle", () => {
 
     const ytEntry = state.uploads["yt-1"]!;
     expect(ytEntry.status).toBe("waiting");
-    expect(ytEntry.uploadType).toBe("youtube");
+    expect(ytEntry.uploadType).toBe("render-vertical");
 
     state = reduce(state, {
       type: "UPDATE_EXPORT_STAGE",
@@ -533,14 +513,11 @@ describe("full integration: reducer + registry through lifecycle", () => {
     state = reduce(state, {
       type: "UPLOAD_SUCCESS",
       uploadId: "yt-1",
-      youtubeVideoId: "yt-xyz",
     });
 
     const ytSuccess = state.uploads["yt-1"]!;
     expect(ytSuccess.status).toBe("success");
-    expect(ytSuccess.uploadType === "youtube" && ytSuccess.youtubeVideoId).toBe(
-      "yt-xyz"
-    );
+    expect(ytSuccess.uploadType).toBe("render-vertical");
   });
 
   it("should handle publish lifecycle: stages → complete → success preserves newDraftVersionId", () => {

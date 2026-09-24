@@ -6,7 +6,7 @@ import { createTable } from "./table-creator.js";
  * The bearer tokens the deployed API authenticates against.
  *
  * Deliberately NOT in `schema-auth.ts`: that file holds the author's
- * credentials for third-party services (YouTube, Dropbox, AI Hero), which no
+ * credentials for third-party services (Google Drive), which no
  * RPC endpoint may ever read. This table is the other direction — credentials
  * OTHER machines present to us.
  *

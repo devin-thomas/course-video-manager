@@ -4,7 +4,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { CoursePublishService } from "@/services/course-publish-service";
 import {
-  fakeDropbox,
+  isCopyRequest,
+  isVideoUploadStart,
+} from "@/test-utils/fake-google-drive";
+import {
+  fakeDrive,
   finishedVideosDir,
   setupPublishServiceTests,
   setupPublishableCourse as setup,
@@ -17,32 +21,21 @@ setupPublishServiceTests();
  * nothing of a Course's Videos is left on this machine.
  *
  * No encode is ever cancelled, so both Videos are re-encoded — and because the
- * encode is reproducible they then match what Dropbox already holds and are
+ * encode is reproducible they then match what Drive already holds and are
  * copied rather than uploaded. The first test takes the copy away; the release
  * still stands, because the bytes were on disk all along.
  *
- * They go through `publish` rather than the manual re-sync because only
- * `publish` has an export phase, which is the half that produces the bytes.
+ * They go through `publish` rather than a bare sync because only `publish`
+ * has an export phase, which is the half that produces the bytes.
  */
 
-/** Only the `.mp4` uploads inside a bundle. */
-const isVideoUploadRequest = (url: string, init: RequestInit) => {
-  if (!url.includes("/2/files/upload") || url.includes("session")) return false;
-  const arg = (init.headers as Record<string, string> | undefined)?.[
-    "Dropbox-API-Arg"
-  ];
-  return Boolean(arg && JSON.parse(arg).path.endsWith(".mp4"));
-};
-
 const videoUploadCount = () =>
-  fakeDropbox.fetchCalls.filter((call) =>
-    isVideoUploadRequest(call.url, call.init)
-  ).length;
+  fakeDrive.calls.filter((call) => isVideoUploadStart(call.url, call.init))
+    .length;
 
-const copyBatchCount = () =>
-  fakeDropbox.fetchCalls.filter((call) =>
-    call.url.includes("/2/files/copy_batch_v2")
-  ).length;
+/** Server-side copies: Drive makes one `files.copy` per reused Video. */
+const copyCount = () =>
+  fakeDrive.calls.filter((call) => isCopyRequest(call.url, call.init)).length;
 
 /** Every `.mp4` the export pool has left in the finished videos directory. */
 const exportsOnDisk = () => {
@@ -59,12 +52,9 @@ const exportsOnDisk = () => {
 };
 
 const remoteBundleVideoPaths = () =>
-  Array.from(fakeDropbox.files.values())
-    .map((stored) => stored.pathDisplay)
-    .filter((remotePath) => remotePath.endsWith(".mp4"))
-    .sort();
+  fakeDrive.filePaths().filter((remotePath) => remotePath.endsWith(".mp4"));
 
-/** The `{versionFingerprint}-{assetFingerprint}` directories in Dropbox. */
+/** The `{versionFingerprint}-{assetFingerprint}` directories in Drive. */
 const remoteBundleDirs = () =>
   Array.from(
     new Set(
@@ -98,7 +88,7 @@ const publish = (courseId: string, versionName: string) =>
   });
 
 describe("CoursePublishService — a Publish after the exports were collected", () => {
-  it("uploads a Video whose copy Dropbox would not make", async () => {
+  it("uploads a Video whose copy Google Drive would not make", async () => {
     const { course, run } = await setup({ videoCount: 2 });
 
     await run(publish(course.id, "v1.0"));
@@ -110,14 +100,14 @@ describe("CoursePublishService — a Publish after the exports were collected", 
     // is left on this machine.
     collectAllExports();
 
-    // ...and then Dropbox refuses the batch. Both Videos fall back to the
+    // ...and then Drive refuses both copies. Both Videos fall back to the
     // upload pool — which has their bytes to send, because they were
     // re-encoded rather than cancelled. 400 rather than 500: a rejection
-    // Dropbox will not reconsider, so the client gives up at once instead of
+    // Drive will not reconsider, so the client gives up at once instead of
     // backing off through its retries.
-    fakeDropbox.failNextRequests({
-      match: (url: string) => url.includes("/2/files/copy_batch_v2"),
-      times: 1,
+    fakeDrive.failNextRequests({
+      match: isCopyRequest,
+      count: 2,
       status: 400,
     });
 
@@ -129,7 +119,7 @@ describe("CoursePublishService — a Publish after the exports were collected", 
     expect(videoUploadCount()).toBe(uploadsAfterFirstRelease + 2);
   }, 60_000);
 
-  it("re-encodes and then copies, sending nothing, when the batch succeeds", async () => {
+  it("re-encodes and then copies, sending nothing, when the copies succeed", async () => {
     const { course, run } = await setup({ videoCount: 2 });
 
     await run(publish(course.id, "v1.0"));
@@ -146,6 +136,6 @@ describe("CoursePublishService — a Publish after the exports were collected", 
     expect(remoteBundleDirs()).toHaveLength(2);
     expect(remoteBundleVideoPaths()).toHaveLength(4);
     expect(videoUploadCount()).toBe(uploadsAfterFirstRelease);
-    expect(copyBatchCount()).toBe(1);
+    expect(copyCount()).toBe(2);
   }, 60_000);
 });

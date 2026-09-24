@@ -14,7 +14,6 @@ import {
 } from "@/services/export-sha256-sidecar";
 
 const SHA = "a".repeat(64);
-const CONTENT_HASH = "b".repeat(64);
 
 const run = <A, E>(effect: Effect.Effect<A, E, NodeContext.NodeContext>) =>
   Effect.runPromise(effect.pipe(Effect.provide(NodeContext.layer)));
@@ -42,7 +41,6 @@ describe("export sha256 sidecar", () => {
         const fs = yield* FileSystem.FileSystem;
         yield* writeExportDigest(fs, exportPath, {
           sha256: SHA,
-          contentHash: CONTENT_HASH,
           bytes,
           durationInSeconds: 12.5,
         });
@@ -52,7 +50,6 @@ describe("export sha256 sidecar", () => {
 
     expect(read).toEqual({
       sha256: SHA,
-      contentHash: CONTENT_HASH,
       bytes,
       durationInSeconds: 12.5,
     });
@@ -79,7 +76,6 @@ describe("export sha256 sidecar", () => {
         const fs = yield* FileSystem.FileSystem;
         yield* writeExportDigest(fs, exportPath, {
           sha256: SHA,
-          contentHash: CONTENT_HASH,
           bytes: bytes + 1,
           durationInSeconds: 12.5,
         });
@@ -95,34 +91,27 @@ describe("export sha256 sidecar", () => {
     ["torn JSON", '{"sha256":"aaa'],
     ["not an object", '"a string"'],
     [
-      "missing contentHash",
-      `{"sha256":"${SHA}","bytes":11,"durationInSeconds":12.5}`,
-    ],
-    [
       "a non-hex sha256",
-      `{"sha256":"zzz","contentHash":"${CONTENT_HASH}","bytes":11,"durationInSeconds":12.5}`,
+      `{"sha256":"zzz","bytes":11,"durationInSeconds":12.5}`,
     ],
-    [
-      "a short sha256",
-      `{"sha256":"abc","contentHash":"${CONTENT_HASH}","bytes":11,"durationInSeconds":12.5}`,
-    ],
+    ["a short sha256", `{"sha256":"abc","bytes":11,"durationInSeconds":12.5}`],
     [
       "a fractional byte count",
-      `{"sha256":"${SHA}","contentHash":"${CONTENT_HASH}","bytes":1.5,"durationInSeconds":12.5}`,
+      `{"sha256":"${SHA}","bytes":1.5,"durationInSeconds":12.5}`,
     ],
     // Every sidecar written before the truncation check has this shape. It is
     // replaced rather than trusted, so the duration is never simply absent.
     [
       "a sidecar written before durations were recorded",
-      `{"sha256":"${SHA}","contentHash":"${CONTENT_HASH}","bytes":11}`,
+      `{"sha256":"${SHA}","bytes":11}`,
     ],
     [
       "a non-numeric duration",
-      `{"sha256":"${SHA}","contentHash":"${CONTENT_HASH}","bytes":11,"durationInSeconds":"12.5"}`,
+      `{"sha256":"${SHA}","bytes":11,"durationInSeconds":"12.5"}`,
     ],
     [
       "a negative duration",
-      `{"sha256":"${SHA}","contentHash":"${CONTENT_HASH}","bytes":11,"durationInSeconds":-1}`,
+      `{"sha256":"${SHA}","bytes":11,"durationInSeconds":-1}`,
     ],
   ])("treats %s as a cache miss rather than an error", async (_label, raw) => {
     const { exportPath, bytes } = makeExport();
@@ -136,6 +125,25 @@ describe("export sha256 sidecar", () => {
     );
 
     expect(read).toBeNull();
+  });
+
+  // Sidecars written while Dropbox was a backend also carry its block
+  // content hash. The extra field must not cost those exports their cache.
+  it("reads a sidecar that still carries a legacy contentHash", async () => {
+    const { exportPath, bytes } = makeExport();
+    writeFileSync(
+      sidecarPath(exportPath),
+      `{"sha256":"${SHA}","contentHash":"${"b".repeat(64)}","bytes":${bytes},"durationInSeconds":12.5}`
+    );
+
+    const read = await run(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        return yield* readExportDigest(fs, exportPath, bytes);
+      })
+    );
+
+    expect(read).toEqual({ sha256: SHA, bytes, durationInSeconds: 12.5 });
   });
 
   it("gives an export that has no sidecar a true one", async () => {
@@ -166,7 +174,6 @@ describe("export sha256 sidecar", () => {
         const fs = yield* FileSystem.FileSystem;
         yield* writeExportDigest(fs, exportPath, {
           sha256: SHA,
-          contentHash: CONTENT_HASH,
           bytes,
           durationInSeconds: 12.5,
         });
@@ -177,7 +184,6 @@ describe("export sha256 sidecar", () => {
 
     expect(read).toEqual({
       sha256: SHA,
-      contentHash: CONTENT_HASH,
       bytes,
       durationInSeconds: 12.5,
     });
@@ -193,7 +199,6 @@ describe("export sha256 sidecar", () => {
         const fs = yield* FileSystem.FileSystem;
         yield* writeExportDigest(fs, exportPath, {
           sha256: SHA,
-          contentHash: CONTENT_HASH,
           bytes,
           durationInSeconds: null,
         });
@@ -204,7 +209,6 @@ describe("export sha256 sidecar", () => {
 
     expect(read).toEqual({
       sha256: SHA,
-      contentHash: CONTENT_HASH,
       bytes,
       durationInSeconds: 42,
     });
@@ -237,7 +241,6 @@ describe("export sha256 sidecar", () => {
         const fs = yield* FileSystem.FileSystem;
         yield* writeExportDigest(fs, unwritable, {
           sha256: SHA,
-          contentHash: CONTENT_HASH,
           bytes: 1,
           durationInSeconds: 12.5,
         });

@@ -16,7 +16,7 @@ const output = Output.object({ tag: "output", schema });
 function baseOptions() {
   return {
     name: "test-run",
-    agent: {} as never,
+    agent: { name: "claude-code" } as never,
     sandbox: {} as never,
     promptFile: "/repo/prompt.md",
     output,
@@ -24,10 +24,13 @@ function baseOptions() {
   };
 }
 
-function produceResult(sessionId: string = "sess-1") {
+function produceResult(
+  sessionId: string = "sess-1",
+  stdout = "produce stdout"
+) {
   return {
     iterations: [{ sessionId }],
-    stdout: "produce stdout",
+    stdout,
     commits: [{ sha: "abc123" }],
     branch: "feat/x",
   } as never;
@@ -186,12 +189,48 @@ describe("runWithExtraction", () => {
     expect(mockRun).toHaveBeenCalledTimes(2); // produce + 1 failed extraction, no retry
   });
 
-  it("throws a clear error when the produce run yields no sessionId", async () => {
+  it("throws a clear error naming the active provider when the produce run yields no sessionId", async () => {
     mockRun.mockResolvedValueOnce(produceResultWithoutSession());
 
-    await expect(runWithExtraction(baseOptions())).rejects.toThrow(
-      /no sessionId/
-    );
+    await expect(
+      runWithExtraction({
+        ...baseOptions(),
+        agent: { name: "antigravity" } as never,
+      })
+    ).rejects.toThrow(/no sessionId.*"antigravity" provider/s);
     expect(mockRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a produce run with non-empty denied_actions as a failure before extracting", async () => {
+    const stdout = `{"type":"result","result":"done","denied_actions":[{"tool":"bash"}]}`;
+    mockRun.mockResolvedValueOnce(produceResult("sess-1", stdout));
+
+    await expect(runWithExtraction(baseOptions())).rejects.toThrow(
+      /denied_actions/
+    );
+    // Produce ran, but extraction was never attempted.
+    expect(mockRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not treat an empty denied_actions array as a failure", async () => {
+    const stdout = `{"type":"result","result":"done","denied_actions":[]}`;
+    mockRun
+      .mockResolvedValueOnce(produceResult("sess-1", stdout))
+      .mockResolvedValueOnce(extractionResult("ok"));
+
+    const result = await runWithExtraction(baseOptions());
+
+    expect(result.output).toEqual({ value: "ok" });
+    expect(mockRun).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not treat unrelated stdout as a soft-deny", async () => {
+    mockRun
+      .mockResolvedValueOnce(produceResult("sess-1", "totally normal output"))
+      .mockResolvedValueOnce(extractionResult("ok"));
+
+    const result = await runWithExtraction(baseOptions());
+
+    expect(result.output).toEqual({ value: "ok" });
   });
 });

@@ -2,6 +2,11 @@ import { sql } from "drizzle-orm";
 import { text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createTable } from "./table-creator.js";
 
+/**
+ * Unused in this fork: the YouTube upload integration was removed. The table
+ * stays until a two-step migration drops it, because migrations are
+ * additive-only (see README).
+ */
 export const youtubeAuth = createTable("youtube_auth", {
   id: varchar("id", { length: 255 })
     .notNull()
@@ -27,6 +32,7 @@ export const youtubeAuth = createTable("youtube_auth", {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+/** Unused in this fork: the AI Hero integration was removed. See youtubeAuth. */
 export const aiHeroAuth = createTable("ai_hero_auth", {
   id: varchar("id", { length: 255 })
     .notNull()
@@ -42,7 +48,36 @@ export const aiHeroAuth = createTable("ai_hero_auth", {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+/**
+ * Unused in this fork: Google Drive is the only course storage backend and the
+ * Dropbox one was removed (ADR 0029). See youtubeAuth.
+ */
 export const dropboxAuth = createTable("dropbox_auth", {
+  id: varchar("id", { length: 255 })
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  expiresAt: timestamp("expires_at", {
+    mode: "date",
+    withTimezone: true,
+  }).notNull(),
+  createdAt: timestamp("created_at", {
+    mode: "date",
+    withTimezone: true,
+  })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at", {
+    mode: "date",
+    withTimezone: true,
+  })
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const googleDriveAuth = createTable("google_drive_auth", {
   id: varchar("id", { length: 255 })
     .notNull()
     .primaryKey()

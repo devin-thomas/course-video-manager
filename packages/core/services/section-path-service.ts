@@ -4,7 +4,7 @@
  * A section's display path is its slugified title (e.g. "Advanced Topics" →
  * "advanced-topics") — no ordering number. Order is carried by the `order`
  * column and by array position in `course.json`; the path exists purely for
- * filesystem legibility (the Dropbox bundle's directory layout, ADR 0023),
+ * filesystem legibility (the Bundle's directory layout, ADR 0023),
  * so it never needs to change when a section is reordered or when a lesson
  * moves in or out of it. Collisions between same-titled sibling sections are
  * disambiguated at the point paths are projected (`path-projection.ts`), not

@@ -283,7 +283,7 @@ VERBS
                        + why not, outstanding work lists, authoring progress
                        (--exclude-todo to match a publish that withholds to-do
                        Lessons).
-  publish <id>         WRITE: mirror the Draft to Dropbox and freeze it as a
+  publish <id>         WRITE: upload the Draft to Google Drive and freeze it as a
                        named Published Version (--name vX.Y.Z required).
   search <id> <query>  Case-insensitive substring search down this course's
                        Draft subtree (--type course|section|lesson|video|beat).

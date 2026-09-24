@@ -37,7 +37,7 @@ A Draft Version's `hasChanges` flag: set the moment any section/lesson/video/cli
 _Avoid_: Dirty, Modified, Needs publish (flag name is `hasChanges`, not a computed status)
 
 **Pending Version**:
-A Submitted CourseVersion whose Dropbox commit receipt has not yet landed. Immutable, named, short-lived: either Promoted (receipt landed) or Discarded (commit failed). At most one per course; one at rest means a crash between receipt and Promote — the publish page reconciles it on load: Promote if the receipt committed, else one-click Discard.
+A Submitted CourseVersion whose commit receipt has not yet landed in Google Drive. Immutable, named, short-lived: either Promoted (receipt landed) or Discarded (commit failed). At most one per course; one at rest means a crash between receipt and Promote — the publish page reconciles it on load: Promote if the receipt committed, else one-click Discard.
 _Avoid_: Frozen version (ambiguous with Published), In-flight version
 
 **Published Version**:
@@ -49,7 +49,7 @@ The Draft → Pending transition: stamps the publish name/description, marks the
 _Avoid_: Freeze (only half the story), Snapshot
 
 **Promote**:
-The Pending → Published transition, recorded once the Dropbox commit receipt (the atomic `course.json` rename) has landed.
+The Pending → Published transition, recorded once the commit receipt (the atomic in-place replacement of `course.json` in Google Drive) has landed.
 _Avoid_: Finalize, Confirm
 
 **Discard**:
@@ -57,7 +57,7 @@ Deletes a Pending Version whose commit did not land — never a Draft or Publish
 _Avoid_: Rollback, Delete version
 
 **Publish**:
-The release flow: validate, Submit, then export and the Dropbox commit interleaved, then export garbage collection, then Promote. Submit comes first because it is a pure database transaction and it is what makes everything after it sound — a Draft still accepts Clip, Video and Section writes, and a Video's title is its path inside the **Bundle**. Any **Unexported Video** is then rendered by the Publish itself, and each one starts uploading the moment its own export finishes rather than waiting for the rest: an export pool (GPU-bound, six-way concurrent) and an upload pool (network-bound, its own smaller limit) run at the same time, connected by a per-Video handoff. Structure is derived from the database (never parsed from disk); the Dropbox output is exclusively `.mp4` files plus one `course.json` and its companion `course.schema.json` (referenced via `$schema`) — no authoring sidecars, no `changelog.md`. Every shipping **Video** must be complete — exportable **Clips** (hence an `.mp4` and an **Export Hash**), a `body`, and a `description` — so no `course.json` field is ever null; an incomplete Video fails the Publish (ADR 0019). A failed export or a caught commit failure auto-Discards the Pending Version.
+The release flow: validate, Submit, then export and the commit to Google Drive interleaved, then export garbage collection, then Promote. Submit comes first because it is a pure database transaction and it is what makes everything after it sound — a Draft still accepts Clip, Video and Section writes, and a Video's title is its path inside the **Bundle**. Any **Unexported Video** is then rendered by the Publish itself, and each one starts uploading the moment its own export finishes rather than waiting for the rest: an export pool (GPU-bound, six-way concurrent) and an upload pool (network-bound, its own smaller limit) run at the same time, connected by a per-Video handoff. Structure is derived from the database (never parsed from disk); the Google Drive output is exclusively `.mp4` files plus one `course.json` and its companion `course.schema.json` (referenced via `$schema`) — no authoring sidecars, no `changelog.md`. Every shipping **Video** must be complete — exportable **Clips** (hence an `.mp4` and an **Export Hash**), a `body`, and a `description` — so no `course.json` field is ever null; an incomplete Video fails the Publish (ADR 0019). A failed export or a caught commit failure auto-Discards the Pending Version.
 _Avoid_: Commit (that is one phase of it), Deploy, Push
 
 **Bundle**:
@@ -190,11 +190,11 @@ _Avoid_: Lint warning, Lint error, Publish blocker (this never blocks a Publish)
 
 **Export Hash**:
 A SHA256 hash derived from a video's clip filenames, timestamps, clip order, long-pause flags, **Clip Zoom**, its **Overlays** (each one's anchor, duration, **Overlay Kind**, content and **Animation Toggles**), format, and the Export Version Key; determines whether a video needs re-export, names the **Exported Video** on disk, and addresses the **Bundle** (ADR 0023). It names what the renderer was asked to do, never what the renderer produced, so it must still name everything the renderer acts on: a clip property that changes the exported bytes but not the hash leaves a stale export addressable, and no **Publish** will re-render it. What such an export can no longer do is reach the site. The send is decided by the **Byte Hash**, so once the author Purges the stale file and re-exports it, the new bytes are uploaded rather than the old ones copied forward (ADR 0027).
-_Avoid_: Content hash (that is an encoding of the **Byte Hash**, not of this), Video hash, Byte Hash (the recipe and the result are different things)
+_Avoid_: Content hash (that suggests a digest of the bytes, which is the **Byte Hash**), Video hash, Byte Hash (the recipe and the result are different things)
 
 **Byte Hash**:
-The digest of an **Exported Video**'s actual bytes — the result, where the **Export Hash** is the recipe. It has two encodings, and both are written into the Export Digest sidecar that sits beside the export: a SHA256, which the published `manifest.json` owes the downstream consumer, and Dropbox's own block content hash, which is what a remote listing reports and is therefore what the comparison is made on. The Byte Hash decides whether a **Video** is sent: a Video whose local Byte Hash matches a file the previous **Bundle** already holds is copied inside Dropbox and nothing crosses the wire, and every other Video is uploaded from this machine. The reuse plan is one map keyed on the Byte Hash, so a Video can be copied from any identical file in the previous Bundle, not only from the one at its own Export Hash. The two hashes must not be merged: the Bundle address has to be knowable before any encoding begins, and a Byte Hash is knowable only after it (ADR 0027).
-_Avoid_: Content hash (only one of its two encodings), SHA256 (likewise), Export Hash (that addresses the file; this decides the send), File hash, Output hash
+The digest of an **Exported Video**'s actual bytes — the result, where the **Export Hash** is the recipe. It is the file's SHA256: written into the Export Digest sidecar that sits beside the export, owed by the published `manifest.json` to the downstream consumer, and reported by Google Drive (`sha256Checksum`) for every stored file, so a local export and a remote file are compared directly. (Sidecars written while upstream's Dropbox backend was in use also carry Dropbox's block `contentHash`; it is ignored.) The Byte Hash decides whether a **Video** is sent: a Video whose local Byte Hash matches a file the previous **Bundle** already holds is copied inside Google Drive and nothing crosses the wire, and every other Video is uploaded from this machine. The reuse plan is one map keyed on the Byte Hash, so a Video can be copied from any identical file in the previous Bundle, not only from the one at its own Export Hash. The two hashes must not be merged: the Bundle address has to be knowable before any encoding begins, and a Byte Hash is knowable only after it (ADR 0027).
+_Avoid_: Content hash (upstream's name for Dropbox's block hash, which is no longer computed), bare "SHA256" (the **Export Hash** is a SHA256 too — say which), Export Hash (that addresses the file; this decides the send), File hash, Output hash
 
 **Exported Video**:
 A rendered `.mp4` file on disk named `{courseId}-{exportHash}.mp4` in the finished videos directory, whose duration this machine has vouched for. A file at the address is not enough: ffmpeg exiting zero says only that it stopped without complaining, so an export is measured against the duration its **Clips** ask for, and one that falls more than a second short is a truncation and is refused rather than kept. The measurement is recorded in the Export Digest sidecar beside the file, together with the **Byte Hash**, so the file is measured once and every later **Publish** reads the verdict instead of re-deriving it.
@@ -364,9 +364,14 @@ _Avoid_: Test, Assessment, Question block, Exercise (reserved for the course's p
 
 **Commit Map**:
 The list of commits a lesson uses, at the top of a **Video**'s `body` — `<CommitMap>` wrapping one or more `<Commit id="…">` commit map entries. Each entry's `id` is a slug naming a lesson commit in the course project repo, which the CVM never reads; `main` is the one id that is not a slug. The first entry is where a reader starts the lesson. The opening tag may carry `packageManager="npm"`, naming the course repo's package manager; omitted, it is `pnpm`. Stored verbatim and shipped unparsed by **Publish**, like a **Quiz**, but never rewritten for the preview — an `id` (and `packageManager`) is a plain attribute, so the card reads the markup as authored. Authored by hand; the Article Writer writes one only when asked.
-_Avoid_: Checkpoint, Commit list, **Course Version** `commitState` (Dropbox publish state, unrelated). "Reset point" names what the first entry is _for_, never an entry in general — a later entry is a cherry-pick target too.
+_Avoid_: Checkpoint, Commit list, **Course Version** `commitState` (publish lifecycle state, unrelated). "Reset point" names what the first entry is _for_, never an entry in general — a later entry is a cherry-pick target too.
 
 ### Video destinations
+
+> **Removed in this fork.** The YouTube, Buffer and AI Hero destinations
+> (including the Skills Changelog and its Kit newsletter) are gone; a Video's
+> only destination is the Course bundle a Publish writes to Google Drive. The
+> entries below describe upstream and are kept for reading its code and ADRs.
 
 **Skills Changelog**:
 A published AI Hero entity bundling an article and a Kit newsletter draft for one **Video**. Created via `POST /api/skills/changelog`; publishes immediately and triggers Inngest `skill-changelog/published`, which creates a Kit newsletter draft (template `5176054`, from `matt@aihero.dev`) — drafts only, never sends. Newsletter required; article + newsletter authored on one page. Public at `https://www.aihero.dev/skills/<slug>`, with a footer linking back.
@@ -434,3 +439,21 @@ _Avoid_: Offline command, Machine command, Disabled command
 **Schema Version**:
 The number of Drizzle migrations a checkout was built against, stated by `cvm` on every request and compared by the deployed API against its own. Any difference is refused outright, naming both numbers and telling the caller to pull — an out-of-date box cannot write against a schema it does not understand. Migrations are applied by the `apps/remote` deploy alone, and are additive-only, so a `cvm` already in flight when one lands keeps working.
 _Avoid_: API version, Migration number, Protocol version
+
+### AFK agent platform
+
+**Agent Runner**:
+The pluggable process described by the Agent-Runner Contract (platform spec §3.8). It is handed inputs (environment variables and pre-fetched context), does work in a git checkout, and writes output files to a directory. The orchestrator — GitHub Actions — owns every tracker and VCS mutation; the runner only emits files. In local (non-CI) runs this separation is relaxed: the runner may use `gh` and `git` directly.
+_Avoid_: Agent, Bot (unqualified)
+
+**Agent Provider**:
+The concrete vendor implementation that the **Agent Runner** delegates to. Each provider wraps a vendor CLI (`claude`, `codex`, `agy`, `cursor`) behind the `AgentProvider` interface from `@ai-hero/sandcastle`: it builds the headless command, parses the vendor's stream format, and optionally captures session state for resume. The provider is selected by `.sandcastle/config.json` and overridable per-run.
+_Avoid_: Backend, Driver, Adapter
+
+**Vendor**:
+One of the supported coding-agent CLI tools: Claude Code, OpenAI Codex, Google Antigravity (`agy`), or Cursor. Each vendor authenticates through its own credential store and draws from its own subscription allowance. The harness treats all vendors as equals — no vendor is limited to a subset of jobs.
+_Avoid_: Tool (unqualified), Service, Platform (in this context)
+
+**Run Verdict**:
+The harness's determination of whether an AFK job succeeded. Computed from three independent signals: the process exit code, the presence and schema-validity of structured output, and ground-truth assertions (e.g. `git rev-list --count` confirming commits exist). All three must agree; exit code alone is never sufficient.
+_Avoid_: Result, Status, Outcome (unqualified)

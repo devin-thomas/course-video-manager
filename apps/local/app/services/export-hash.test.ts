@@ -12,6 +12,10 @@ import {
   type ExportOverlay,
 } from "@/services/export-hash";
 import { garbageCollect } from "@/services/export-hash.server";
+import path from "node:path";
+
+// Joined as the product joins it, so `\` on Windows.
+const out = (fileName: string) => path.join("/output", fileName);
 
 const makeClip = (
   overrides: Partial<ExportClip> &
@@ -410,7 +414,7 @@ describe("export-hash", () => {
   describe("resolveExportPath", () => {
     it("returns absolute path in finished videos directory", () => {
       expect(resolveExportPath("/output", "course-123", "abc123")).toBe(
-        "/output/course-123-abc123.mp4"
+        out("course-123-abc123.mp4")
       );
     });
   });
@@ -430,7 +434,7 @@ describe("export-hash", () => {
 
       const fsLayer = FileSystem.layerNoop({
         exists: (filePath) =>
-          Effect.succeed(filePath === `/output/course-1-${hash}.mp4`),
+          Effect.succeed(filePath === out(`course-1-${hash}.mp4`)),
       });
 
       const result = await Effect.runPromise(
@@ -583,7 +587,7 @@ describe("export-hash", () => {
       );
 
       expect(removedFiles).toEqual([
-        "/output/course-1-deadbeef12345678901234567890ab.mp4",
+        out("course-1-deadbeef12345678901234567890ab.mp4"),
       ]);
     });
 
@@ -637,8 +641,8 @@ describe("export-hash", () => {
       // The sidecar shares the export's Export Hash, so it shares its fate —
       // otherwise every collected export would leave one behind forever.
       expect(removedFiles.sort()).toEqual([
-        `/output/course-1-${staleHash}.mp4`,
-        `/output/course-1-${staleHash}.mp4.sha256`,
+        out(`course-1-${staleHash}.mp4`),
+        out(`course-1-${staleHash}.mp4.sha256`),
       ]);
     });
 
@@ -680,7 +684,7 @@ describe("export-hash", () => {
 
       // Only the course-1 prefixed file should be considered for deletion
       expect(removedFiles).toEqual([
-        "/output/course-1-stale12345678901234567890abcd.mp4",
+        out("course-1-stale12345678901234567890abcd.mp4"),
       ]);
     });
 
@@ -720,7 +724,7 @@ describe("export-hash", () => {
 
       // Only the stale file should be deleted
       expect(removedFiles).toEqual([
-        "/output/course-1-oldstale1234567890123456789012.mp4",
+        out("course-1-oldstale1234567890123456789012.mp4"),
       ]);
     });
   });

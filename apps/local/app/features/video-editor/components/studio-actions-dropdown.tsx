@@ -11,7 +11,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ChevronDown, DownloadIcon, FilmIcon, SendIcon } from "lucide-react";
+import { ChevronDown, DownloadIcon, FilmIcon } from "lucide-react";
 import {
   CopySubmenu,
   CopyVideoItem,
@@ -25,9 +25,6 @@ export const StudioActionsDropdown = (props: {
   allClipsHaveText: boolean;
   onExport: () => void;
   onRenderVertical?: () => void;
-  onPostShorts?: () => void;
-  onPostYoutube?: () => void;
-  onPostTiktok?: () => void;
   videoId: string;
   isCopied: boolean;
   copyTranscriptToClipboard: () => void;
@@ -76,45 +73,6 @@ export const StudioActionsDropdown = (props: {
             </div>
           </DropdownMenuItem>
         )}
-
-        <DropdownMenuItem
-          disabled={!props.onPostShorts}
-          onSelect={props.onPostShorts}
-        >
-          <SendIcon className="w-4 h-4 mr-2" />
-          <div className="flex flex-col">
-            <span className="font-medium">Post Short</span>
-            <span className="text-xs text-muted-foreground">
-              Post to YouTube Shorts + TikTok
-            </span>
-          </div>
-        </DropdownMenuItem>
-
-        <DropdownMenuItem
-          disabled={!props.onPostYoutube}
-          onSelect={props.onPostYoutube}
-        >
-          <SendIcon className="w-4 h-4 mr-2" />
-          <div className="flex flex-col">
-            <span className="font-medium">Post to YouTube</span>
-            <span className="text-xs text-muted-foreground">
-              Upload as a YouTube Short
-            </span>
-          </div>
-        </DropdownMenuItem>
-
-        <DropdownMenuItem
-          disabled={!props.onPostTiktok}
-          onSelect={props.onPostTiktok}
-        >
-          <SendIcon className="w-4 h-4 mr-2" />
-          <div className="flex flex-col">
-            <span className="font-medium">Post to TikTok</span>
-            <span className="text-xs text-muted-foreground">
-              Post to TikTok via Buffer
-            </span>
-          </div>
-        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
 

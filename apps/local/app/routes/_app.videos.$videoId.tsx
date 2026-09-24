@@ -19,10 +19,7 @@ import {
   Plus,
   VideoIcon,
   SendIcon,
-  YoutubeIcon,
-  NewspaperIcon,
-  MailIcon,
-  HistoryIcon,
+  FileTextIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useMatches } from "react-router";
@@ -81,14 +78,7 @@ export const loader = makeLoader({
     }),
 });
 
-type Tab =
-  | "edit"
-  | "lesson"
-  | "post"
-  | "social"
-  | "ai-hero"
-  | "skills-changelog"
-  | "newsletter";
+type Tab = "edit" | "lesson" | "post" | "social";
 
 const topTabsDef: {
   id: "edit" | "post";
@@ -120,25 +110,12 @@ const lessonTab: PostSubTab = {
 };
 
 const commonPostSubTabs: PostSubTab[] = [
-  { id: "post", label: "YouTube", path: "post", icon: YoutubeIcon },
+  { id: "post", label: "Details", path: "post", icon: FileTextIcon },
   { id: "social", label: "X / LinkedIn", path: "social", icon: SendIcon },
-  { id: "ai-hero", label: "AI Hero", path: "ai-hero", icon: NewspaperIcon },
-  {
-    id: "skills-changelog",
-    label: "Skills Changelog",
-    path: "skills-changelog",
-    icon: HistoryIcon,
-  },
-  { id: "newsletter", label: "Newsletter", path: "newsletter", icon: MailIcon },
 ];
 
 const isPostTab = (tab: Tab): boolean =>
-  tab === "lesson" ||
-  tab === "post" ||
-  tab === "social" ||
-  tab === "ai-hero" ||
-  tab === "skills-changelog" ||
-  tab === "newsletter";
+  tab === "lesson" || tab === "post" || tab === "social";
 
 export default function VideoLayout({ loaderData }: Route.ComponentProps) {
   const {
@@ -182,13 +159,7 @@ export default function VideoLayout({ loaderData }: Route.ComponentProps) {
       ? "post"
       : location.pathname.endsWith("/social")
         ? "social"
-        : location.pathname.endsWith("/ai-hero")
-          ? "ai-hero"
-          : location.pathname.endsWith("/skills-changelog")
-            ? "skills-changelog"
-            : location.pathname.endsWith("/newsletter")
-              ? "newsletter"
-              : "edit";
+        : "edit";
 
   const backButtonUrl = getBackButtonUrl(repoId, lessonId, format, pitchId);
 

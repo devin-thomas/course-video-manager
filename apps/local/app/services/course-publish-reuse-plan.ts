@@ -1,13 +1,17 @@
 import { Effect } from "effect";
-import { download, listFolder } from "./dropbox-http-client";
+import {
+  isRemoteStorageError,
+  type CourseStorage,
+  type RemoteFile,
+} from "./course-storage";
 
 /**
  * A file in the previously Published Bundle that a Video of THIS Publish can
- * take verbatim, because Dropbox already holds exactly its bytes.
+ * take verbatim, because the backend already holds exactly its bytes.
  *
- * `contentHash` is the file's Byte Hash as Dropbox reports it, and is both the
- * key the plan is indexed by and what the copy is checked against once Dropbox
- * reports it back. `sha256` and `bytes` come out of the previous manifest and
+ * `byteHash` is the file's Byte Hash as the backend reports it, and is both the
+ * key the plan is indexed by and what the copy is checked against once the
+ * backend reports it back. `sha256` and `bytes` come out of the previous manifest and
  * are owed to the new one only where this machine holds no export to digest —
  * a Video already sitting at this Publish's address with its local file since
  * collected. Everywhere else the manifest's SHA256 comes from the local Export
@@ -15,10 +19,10 @@ import { download, listFolder } from "./dropbox-http-client";
  * the bytes some earlier release shipped.
  */
 export type ReusableSource = {
-  /** Full Dropbox path of the file inside the previous Bundle. */
-  fromPath: string;
-  /** Dropbox's block hash for that file, read from the Bundle listing. */
-  contentHash: string;
+  /** The file inside the previous Bundle, as the backend listed it. */
+  from: RemoteFile;
+  /** The backend's Byte Hash for that file, read from the Bundle listing. */
+  byteHash: string;
   /** SHA256 of the bytes, read from the previous manifest. */
   sha256: string;
   bytes: number;
@@ -28,7 +32,7 @@ export type ReusableSource = {
  * What the previous Bundle can hand this one, indexed by Byte Hash.
  *
  * A Video is copyable when the Byte Hash of the export on THIS machine matches
- * a file Dropbox already holds. That is the only comparison that can tell a
+ * a file Google Drive already holds. That is the only comparison that can tell a
  * re-export apart from an unchanged one, because the Export Hash names what the
  * renderer was asked to do and says nothing about what it produced. Indexing by
  * bytes also means a Video can be copied from ANY identical file in the
@@ -101,7 +105,8 @@ const bundleDirOf = (relativePath: string): string | null => {
 };
 
 /**
- * Work out which Videos of this Publish already exist on Dropbox, and where.
+ * Work out which Videos of this Publish already exist in Google Drive, and
+ * where.
  *
  * The plan is drawn from the Commit receipt — the previously Published Bundle
  * — and nothing older. Reaching further back would make a Publish cost more
@@ -118,18 +123,17 @@ const bundleDirOf = (relativePath: string): string | null => {
  * today.
  */
 export const planBundleReuse = Effect.fn("planBundleReuse")(function* (input: {
-  accessToken: string;
-  dropboxCourseDir: string;
+  storage: CourseStorage;
 }) {
-  const receipt = yield* download({
-    accessToken: input.accessToken,
-    path: `${input.dropboxCourseDir}/course.json`,
-  }).pipe(Effect.catchTag("DropboxApiError", () => Effect.succeed(null)));
-  if (receipt === null) return EMPTY_REUSE_PLAN;
+  const { storage } = input;
+  const receipt = yield* storage
+    .readCommitReceipt()
+    .pipe(Effect.catchIf(isRemoteStorageError, () => Effect.succeed(null)));
+  if (receipt === null || receipt.state === "absent") return EMPTY_REUSE_PLAN;
 
   let manifest: unknown;
   try {
-    manifest = JSON.parse(receipt.toString("utf-8"));
+    manifest = JSON.parse(receipt.content.toString("utf-8"));
   } catch {
     return EMPTY_REUSE_PLAN;
   }
@@ -140,41 +144,32 @@ export const planBundleReuse = Effect.fn("planBundleReuse")(function* (input: {
   const bundleDir = bundleDirOf(manifestVideos[0]!.relativePath);
   if (bundleDir === null) return EMPTY_REUSE_PLAN;
 
-  const remoteEntries = yield* listFolder({
-    accessToken: input.accessToken,
-    path: `${input.dropboxCourseDir}/${bundleDir}`,
-    recursive: true,
-  }).pipe(Effect.catchTag("DropboxApiError", () => Effect.succeed([])));
+  const remoteEntries = yield* storage
+    .listFiles(bundleDir)
+    .pipe(Effect.catchIf(isRemoteStorageError, () => Effect.succeed([])));
 
-  const contentHashByPath = new Map<string, { hash: string; size: number }>();
-  for (const entry of remoteEntries) {
-    if (entry[".tag"] !== "file") continue;
-    contentHashByPath.set(entry.path_display.toLowerCase(), {
-      hash: entry.content_hash,
-      size: entry.size,
-    });
-  }
+  const listedByPath = new Map<string, RemoteFile>();
+  for (const entry of remoteEntries) listedByPath.set(entry.key, entry);
 
   const plan = new Map<string, ReusableSource>();
   for (const video of manifestVideos) {
-    const fromPath = `${input.dropboxCourseDir}/${video.relativePath}`;
-    const remote = contentHashByPath.get(fromPath.toLowerCase());
+    const remote = listedByPath.get(video.relativePath.toLowerCase());
     // Listed but gone, or never listed: the manifest promised a file that is
     // no longer there. Upload it instead.
     if (!remote) continue;
     // The manifest and the listing must agree about the file before it is
     // worth copying. Disagreement means the Bundle was tampered with.
-    if (remote.size !== video.bytes) continue;
+    if (remote.bytes !== video.bytes) continue;
     const source: ReusableSource = {
-      fromPath,
-      contentHash: remote.hash,
+      from: remote,
+      byteHash: remote.byteHash,
       sha256: video.sha256,
       bytes: video.bytes,
     };
     // Several files can carry one Byte Hash. Any of them serves, because the
     // bytes are the same bytes — so the first entry wins and the rest are
     // redundant.
-    if (!plan.has(remote.hash)) plan.set(remote.hash, source);
+    if (!plan.has(remote.byteHash)) plan.set(remote.byteHash, source);
   }
 
   // Widened on the way out, so no caller can add to, or take from, a plan

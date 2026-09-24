@@ -43,7 +43,7 @@ export const soundExportDurationProbe = (): Effect.Effect<number> =>
  * held open until the test releases it by name.
  *
  * This is the only way to prove that export and upload genuinely overlap —
- * hold one Video's encode, watch another Video reach Dropbox, and assert the
+ * hold one Video's encode, watch another Video reach Drive, and assert the
  * held one is still encoding. Everything here is event-driven (promises
  * resolved by the fake itself); nothing sleeps, polls or measures wall-clock
  * time, because the suite runs in forked pools whose worker counts vary by

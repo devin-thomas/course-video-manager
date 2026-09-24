@@ -67,12 +67,14 @@ export async function runWithExtraction<T>(
 
   const produce = await run(produceOptions);
 
+  assertNoSoftDeny(produce.stdout);
+
   const sessionId = produce.iterations.at(-1)?.sessionId;
   if (!sessionId) {
     throw new Error(
       "runWithExtraction: produce run returned no sessionId, so the extraction " +
-        "pass cannot resume it. Session capture must be enabled (Claude Code " +
-        "provider with sessions written to the host)."
+        `pass cannot resume it. The "${produceOptions.agent.name}" provider may not ` +
+        "support session capture in its current configuration."
     );
   }
 
@@ -94,4 +96,35 @@ export async function runWithExtraction<T>(
   // Commits/branch come from the produce run (extraction does no work); only
   // the structured output comes from the extraction pass.
   return { ...produce, output: extraction.output };
+}
+
+/**
+ * Defense-in-depth check for Antigravity's soft-deny behavior (ADR 0030,
+ * docs/agents/multi-vendor-sandcastle-spec.md §6.2): `agy` can exit 0 — and a
+ * produce run can otherwise look like it succeeded — while its NDJSON `result`
+ * event carries `denied_actions`. `AntigravityProvider.parseStreamLine`
+ * (.sandcastle/providers/antigravity.ts) already throws when it sees this
+ * itself, but that only protects runs going through that provider's own
+ * stream parser; this is a second, vendor-agnostic net on the produce run's
+ * captured stdout, so a soft-denied run never gets as far as an extraction
+ * pass over output that was never meant to stand.
+ */
+function assertNoSoftDeny(stdout: string): void {
+  const match = stdout.match(/"denied_actions"\s*:\s*(\[[^\]]*\])/);
+  if (!match) return;
+
+  let deniedActions: unknown;
+  try {
+    deniedActions = JSON.parse(match[1]!);
+  } catch {
+    return; // Not a real denied_actions payload — ignore.
+  }
+
+  if (Array.isArray(deniedActions) && deniedActions.length > 0) {
+    throw new Error(
+      `runWithExtraction: the produce run reported ${deniedActions.length} ` +
+        "denied_actions(s) — treating it as a failure rather than attempting " +
+        "extraction on output that was never meant to stand."
+    );
+  }
 }

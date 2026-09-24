@@ -7,7 +7,7 @@ on:
 jobs:
   to-issues-prd:
     if: github.event.label.name == 'agent:to-issues'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 30
     concurrency:
       group: agent-to-issues-prd-issue-${{ github.event.issue.number }}
@@ -72,11 +72,32 @@ jobs:
           gh issue edit "$PRD_NUMBER" --remove-label "agent:blocked" || true
           gh issue edit "$PRD_NUMBER" --add-label "agent:in-progress" || true
 
-      - name: Checkout main
+      - name: Resolve provider and base branch
+        if: steps.shape.outputs.mode == 'run'
+        id: sandcastle
+        env:
+          SANDCASTLE_PROVIDER: ${{ vars.SANDCASTLE_PROVIDER }}
+        run: |
+          set -euo pipefail
+          config=$(gh api "repos/${GH_REPO}/contents/.sandcastle/config.json" --jq '.content' | base64 -d)
+          provider="${SANDCASTLE_PROVIDER:-$(echo "$config" | jq -r '.defaultProvider')}"
+          base_ref=$(echo "$config" | jq -r '.defaultBaseBranch')
+          case "$provider" in
+            claude-code) bot_name="claude-code[bot]" ;;
+            codex) bot_name="codex[bot]" ;;
+            antigravity) bot_name="agy[bot]" ;;
+            cursor) bot_name="cursor[bot]" ;;
+            *) echo "Unknown Sandcastle provider: $provider" >&2; exit 1 ;;
+          esac
+          echo "provider=$provider" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+          echo "bot_name=$bot_name" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout base branch
         if: steps.shape.outputs.mode == 'run'
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ steps.sandcastle.outputs.base_ref }}
           fetch-depth: 1
 
       - name: Setup pnpm
@@ -94,14 +115,25 @@ jobs:
         if: steps.shape.outputs.mode == 'run'
         run: pnpm install --frozen-lockfile
 
-      - name: Install Claude Code
+      - name: Install agent CLI
         if: steps.shape.outputs.mode == 'run'
-        run: npm install -g @anthropic-ai/claude-code
+        env:
+          PROVIDER: ${{ steps.sandcastle.outputs.provider }}
+        run: |
+          case "$PROVIDER" in
+            claude-code) npm install -g @anthropic-ai/claude-code ;;
+            codex) npm install -g @openai/codex ;;
+            antigravity) curl -fsSL https://antigravity.google/cli/install.sh | bash ;;
+            cursor) npm install @cursor/sdk ;;
+            *) echo "Unknown Sandcastle provider: $PROVIDER" >&2; exit 1 ;;
+          esac
 
       - name: Run to-issues-prd.ts
         if: steps.shape.outputs.mode == 'run'
         env:
+          SANDCASTLE_PROVIDER: ${{ steps.sandcastle.outputs.provider }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           PRD_NUMBER: ${{ env.PRD_NUMBER }}
           PRD_TITLE: ${{ env.PRD_TITLE }}
           GH_REPO: ${{ env.GH_REPO }}

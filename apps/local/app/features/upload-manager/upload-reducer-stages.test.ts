@@ -11,34 +11,18 @@ const createState = (
   ...overrides,
 });
 
-const createYouTubeEntry = (
-  overrides: Partial<Omit<uploadReducer.YouTubeUploadEntry, "uploadType">> = {}
-): uploadReducer.YouTubeUploadEntry => ({
+const createRenderVerticalEntry = (
+  overrides: Partial<
+    Omit<uploadReducer.RenderVerticalUploadEntry, "uploadType">
+  > = {}
+): uploadReducer.RenderVerticalUploadEntry => ({
   uploadId: "upload-1",
   videoId: "video-1",
   title: "Test Video",
   progress: 0,
   status: "uploading",
-  uploadType: "youtube",
-  youtubeVideoId: null,
-  errorMessage: null,
-  retryCount: 0,
-  terminal: false,
-  dependsOn: null,
-  parentUploadId: null,
-  ...overrides,
-});
-
-const createBufferEntry = (
-  overrides: Partial<Omit<uploadReducer.BufferUploadEntry, "uploadType">> = {}
-): uploadReducer.BufferUploadEntry => ({
-  uploadId: "upload-1",
-  videoId: "video-1",
-  title: "Test Video",
-  progress: 0,
-  status: "uploading",
-  uploadType: "buffer",
-  bufferStage: "uploading-blob",
+  uploadType: "render-vertical",
+  renderVerticalStage: null,
   errorMessage: null,
   retryCount: 0,
   terminal: false,
@@ -87,90 +71,6 @@ const createPublishEntry = (
   dependsOn: null,
   parentUploadId: null,
   ...overrides,
-});
-
-describe("UPDATE_BUFFER_STAGE", () => {
-  it("should update buffer stage for existing upload", () => {
-    const state = reduce(
-      createState({
-        uploads: {
-          "upload-1": createBufferEntry({ bufferStage: "uploading-blob" }),
-        },
-      }),
-      {
-        type: "UPDATE_BUFFER_STAGE",
-        uploadId: "upload-1",
-        stage: "creating-post",
-      }
-    );
-
-    const upload = state.uploads["upload-1"]!;
-    expect(upload.uploadType === "buffer" && upload.bufferStage).toBe(
-      "creating-post"
-    );
-  });
-
-  it("should transition from creating-post to polling", () => {
-    const state = reduce(
-      createState({
-        uploads: {
-          "upload-1": createBufferEntry({ bufferStage: "creating-post" }),
-        },
-      }),
-      {
-        type: "UPDATE_BUFFER_STAGE",
-        uploadId: "upload-1",
-        stage: "polling",
-      }
-    );
-
-    const upload = state.uploads["upload-1"]!;
-    expect(upload.uploadType === "buffer" && upload.bufferStage).toBe(
-      "polling"
-    );
-  });
-
-  it("should set progress based on stage", () => {
-    const state = reduce(
-      createState({
-        uploads: {
-          "upload-1": createBufferEntry({ bufferStage: "uploading-blob" }),
-        },
-      }),
-      {
-        type: "UPDATE_BUFFER_STAGE",
-        uploadId: "upload-1",
-        stage: "polling",
-      }
-    );
-
-    const upload = state.uploads["upload-1"]!;
-    expect(upload.progress).toBe(70);
-  });
-
-  it("should not modify state for non-existent upload", () => {
-    const initial = createState();
-    const state = reduce(initial, {
-      type: "UPDATE_BUFFER_STAGE",
-      uploadId: "non-existent",
-      stage: "creating-post",
-    });
-
-    expect(state).toBe(initial);
-  });
-
-  it("should not modify state for non-buffer upload", () => {
-    const initial = createState({
-      uploads: { "upload-1": createYouTubeEntry() },
-    });
-    const state = reduce(initial, {
-      type: "UPDATE_BUFFER_STAGE",
-      uploadId: "upload-1",
-      stage: "creating-post",
-    });
-
-    expect(state).toBe(initial);
-  });
 });
 
 describe("UPDATE_EXPORT_STAGE", () => {
@@ -250,7 +150,7 @@ describe("UPDATE_EXPORT_STAGE", () => {
 
   it("should not modify state for non-export upload", () => {
     const initial = createState({
-      uploads: { "upload-1": createYouTubeEntry() },
+      uploads: { "upload-1": createRenderVerticalEntry() },
     });
     const state = reduce(initial, {
       type: "UPDATE_EXPORT_STAGE",
@@ -348,7 +248,7 @@ describe("UPDATE_EXPORT_PROGRESS", () => {
 
   it("should not modify state for non-export upload", () => {
     const initial = createState({
-      uploads: { "upload-1": createYouTubeEntry() },
+      uploads: { "upload-1": createRenderVerticalEntry() },
     });
     const state = reduce(initial, {
       type: "UPDATE_EXPORT_PROGRESS",
@@ -460,7 +360,7 @@ describe("UPDATE_PUBLISH_STAGE", () => {
 
   it("should not modify state for non-publish upload", () => {
     const initial = createState({
-      uploads: { "upload-1": createYouTubeEntry() },
+      uploads: { "upload-1": createRenderVerticalEntry() },
     });
     const state = reduce(initial, {
       type: "UPDATE_PUBLISH_STAGE",
@@ -504,7 +404,7 @@ describe("PUBLISH_COMPLETE", () => {
 
   it("should not modify state for non-publish upload", () => {
     const initial = createState({
-      uploads: { "upload-1": createYouTubeEntry() },
+      uploads: { "upload-1": createRenderVerticalEntry() },
     });
     const state = reduce(initial, {
       type: "PUBLISH_COMPLETE",
@@ -513,91 +413,6 @@ describe("PUBLISH_COMPLETE", () => {
     });
 
     expect(state).toBe(initial);
-  });
-});
-
-describe("buffer upload lifecycle with stages", () => {
-  it("should progress through all buffer stages to success", () => {
-    let state = createState();
-
-    state = reduce(state, {
-      type: "START_UPLOAD",
-      uploadId: "buf-1",
-      videoId: "video-1",
-      title: "Social Post",
-      uploadType: "buffer",
-    });
-    const started = state.uploads["buf-1"]!;
-    expect(started.uploadType === "buffer" && started.bufferStage).toBe(
-      "uploading-blob"
-    );
-
-    state = reduce(state, {
-      type: "UPDATE_BUFFER_STAGE",
-      uploadId: "buf-1",
-      stage: "creating-post",
-    });
-    const creating = state.uploads["buf-1"]!;
-    expect(creating.uploadType === "buffer" && creating.bufferStage).toBe(
-      "creating-post"
-    );
-
-    state = reduce(state, {
-      type: "UPDATE_BUFFER_STAGE",
-      uploadId: "buf-1",
-      stage: "polling",
-    });
-    const polling = state.uploads["buf-1"]!;
-    expect(polling.uploadType === "buffer" && polling.bufferStage).toBe(
-      "polling"
-    );
-
-    state = reduce(state, {
-      type: "UPDATE_BUFFER_STAGE",
-      uploadId: "buf-1",
-      stage: "cleaning-up",
-    });
-    const cleanup = state.uploads["buf-1"]!;
-    expect(cleanup.uploadType === "buffer" && cleanup.bufferStage).toBe(
-      "cleaning-up"
-    );
-
-    state = reduce(state, {
-      type: "UPLOAD_SUCCESS",
-      uploadId: "buf-1",
-    });
-    const success = state.uploads["buf-1"]!;
-    expect(success.status).toBe("success");
-    expect(success.uploadType === "buffer" && success.bufferStage).toBeNull();
-  });
-
-  it("should reset bufferStage to uploading-blob on retry", () => {
-    let state = reduce(createState(), {
-      type: "START_UPLOAD",
-      uploadId: "buf-1",
-      videoId: "video-1",
-      title: "Retrying Buffer",
-      uploadType: "buffer",
-    });
-
-    state = reduce(state, {
-      type: "UPDATE_BUFFER_STAGE",
-      uploadId: "buf-1",
-      stage: "polling",
-    });
-    state = reduce(state, {
-      type: "UPLOAD_ERROR",
-      uploadId: "buf-1",
-      errorMessage: "Poll error",
-    });
-    state = reduce(state, { type: "RETRY", uploadId: "buf-1" });
-
-    const retried = state.uploads["buf-1"]!;
-    expect(retried.status).toBe("uploading");
-    expect(retried.uploadType === "buffer" && retried.bufferStage).toBe(
-      "uploading-blob"
-    );
-    expect(retried.progress).toBe(0);
   });
 });
 

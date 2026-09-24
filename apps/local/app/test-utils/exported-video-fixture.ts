@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import { createHash } from "node:crypto";
-import { DropboxContentHasher } from "@/services/dropbox-content-hash";
 import { sidecarPath } from "@/services/export-sha256-sidecar";
 import { SOUND_FAKE_EXPORT_DURATION_IN_SECONDS } from "./fake-video-processing";
 
@@ -21,13 +20,10 @@ export const writeAlreadyExportedVideo = (
   const bytes = Buffer.from(contents);
   fs.writeFileSync(exportPath, bytes);
 
-  const contentHasher = new DropboxContentHasher();
-  contentHasher.update(bytes);
   fs.writeFileSync(
     sidecarPath(exportPath),
     JSON.stringify({
       sha256: createHash("sha256").update(bytes).digest("hex"),
-      contentHash: contentHasher.digest(),
       bytes: bytes.length,
       durationInSeconds: SOUND_FAKE_EXPORT_DURATION_IN_SECONDS,
     })

@@ -11,16 +11,18 @@ const createState = (
   ...overrides,
 });
 
-const createYouTubeEntry = (
-  overrides: Partial<Omit<uploadReducer.YouTubeUploadEntry, "uploadType">> = {}
-): uploadReducer.YouTubeUploadEntry => ({
+const createRenderVerticalEntry = (
+  overrides: Partial<
+    Omit<uploadReducer.RenderVerticalUploadEntry, "uploadType">
+  > = {}
+): uploadReducer.RenderVerticalUploadEntry => ({
   uploadId: "upload-1",
   videoId: "video-1",
   title: "Test Video",
   progress: 0,
   status: "uploading",
-  uploadType: "youtube",
-  youtubeVideoId: null,
+  uploadType: "render-vertical",
+  renderVerticalStage: null,
   errorMessage: null,
   retryCount: 0,
   terminal: false,
@@ -33,6 +35,7 @@ describe("START_UPLOAD", () => {
   it("should create entry via registry with uploading status", () => {
     const state = reduce(createState(), {
       type: "START_UPLOAD",
+      uploadType: "render-vertical",
       uploadId: "upload-1",
       videoId: "video-1",
       title: "My Video",
@@ -46,24 +49,14 @@ describe("START_UPLOAD", () => {
     expect(upload.dependsOn).toBeNull();
   });
 
-  it("should default uploadType to youtube", () => {
-    const state = reduce(createState(), {
-      type: "START_UPLOAD",
-      uploadId: "upload-1",
-      videoId: "video-1",
-      title: "My Video",
-    });
-
-    expect(state.uploads["upload-1"]!.uploadType).toBe("youtube");
-  });
-
   it("should not affect existing uploads", () => {
-    const existing = createYouTubeEntry({
+    const existing = createRenderVerticalEntry({
       uploadId: "upload-1",
       progress: 50,
     });
     const state = reduce(createState({ uploads: { "upload-1": existing } }), {
       type: "START_UPLOAD",
+      uploadType: "render-vertical",
       uploadId: "upload-2",
       videoId: "video-2",
       title: "Second Video",
@@ -74,7 +67,7 @@ describe("START_UPLOAD", () => {
   });
 
   it("should overwrite if same uploadId is started again", () => {
-    const existing = createYouTubeEntry({
+    const existing = createRenderVerticalEntry({
       uploadId: "upload-1",
       progress: 50,
       status: "error",
@@ -82,6 +75,7 @@ describe("START_UPLOAD", () => {
     });
     const state = reduce(createState({ uploads: { "upload-1": existing } }), {
       type: "START_UPLOAD",
+      uploadType: "render-vertical",
       uploadId: "upload-1",
       videoId: "video-1",
       title: "Restarted Video",
@@ -103,6 +97,7 @@ describe("START_UPLOAD", () => {
     });
     state = reduce(state, {
       type: "START_UPLOAD",
+      uploadType: "render-vertical",
       uploadId: "yt-1",
       videoId: "video-1",
       title: "Upload",
@@ -115,10 +110,8 @@ describe("START_UPLOAD", () => {
 
   it("should create type-specific entries via registry for each upload type", () => {
     const types: uploadReducer.UploadType[] = [
-      "youtube",
-      "buffer",
-      "ai-hero",
-      "skills-changelog",
+      "render-vertical",
+      "publish",
       "export",
       "publish",
     ];
@@ -143,7 +136,7 @@ describe("UPDATE_PROGRESS", () => {
   it("should update progress for existing upload", () => {
     const state = reduce(
       createState({
-        uploads: { "upload-1": createYouTubeEntry() },
+        uploads: { "upload-1": createRenderVerticalEntry() },
       }),
       { type: "UPDATE_PROGRESS", uploadId: "upload-1", progress: 42 }
     );
@@ -163,11 +156,11 @@ describe("UPDATE_PROGRESS", () => {
   });
 
   it("should not affect other uploads", () => {
-    const upload1 = createYouTubeEntry({
+    const upload1 = createRenderVerticalEntry({
       uploadId: "upload-1",
       progress: 10,
     });
-    const upload2 = createYouTubeEntry({
+    const upload2 = createRenderVerticalEntry({
       uploadId: "upload-2",
       progress: 20,
     });
@@ -188,13 +181,12 @@ describe("UPLOAD_SUCCESS", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ progress: 95 }),
+          "upload-1": createRenderVerticalEntry({ progress: 95 }),
         },
       }),
       {
         type: "UPLOAD_SUCCESS",
         uploadId: "upload-1",
-        youtubeVideoId: "yt-abc123",
       }
     );
 
@@ -218,7 +210,7 @@ describe("UPLOAD_SUCCESS", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({
+          "upload-1": createRenderVerticalEntry({
             errorMessage: "previous error",
             status: "uploading",
           }),
@@ -227,7 +219,6 @@ describe("UPLOAD_SUCCESS", () => {
       {
         type: "UPLOAD_SUCCESS",
         uploadId: "upload-1",
-        youtubeVideoId: "yt-abc",
       }
     );
 
@@ -240,7 +231,7 @@ describe("UPLOAD_FATAL_ERROR", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ retryCount: 0 }),
+          "upload-1": createRenderVerticalEntry({ retryCount: 0 }),
         },
       }),
       {
@@ -263,7 +254,7 @@ describe("UPLOAD_ERROR", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ retryCount: 0 }),
+          "upload-1": createRenderVerticalEntry({ retryCount: 0 }),
         },
       }),
       {
@@ -283,7 +274,7 @@ describe("UPLOAD_ERROR", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ retryCount: 1 }),
+          "upload-1": createRenderVerticalEntry({ retryCount: 1 }),
         },
       }),
       {
@@ -301,7 +292,7 @@ describe("UPLOAD_ERROR", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ retryCount: 2 }),
+          "upload-1": createRenderVerticalEntry({ retryCount: 2 }),
         },
       }),
       {
@@ -334,7 +325,7 @@ describe("RETRY", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({
+          "upload-1": createRenderVerticalEntry({
             status: "retrying",
             retryCount: 1,
             progress: 50,
@@ -364,7 +355,7 @@ describe("RETRY", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({
+          "upload-1": createRenderVerticalEntry({
             status: "retrying",
             retryCount: 1,
           }),
@@ -373,7 +364,7 @@ describe("RETRY", () => {
       { type: "RETRY", uploadId: "upload-1" }
     );
 
-    expect(state.uploads["upload-1"]!.uploadType).toBe("youtube");
+    expect(state.uploads["upload-1"]!.uploadType).toBe("render-vertical");
   });
 });
 
@@ -382,7 +373,7 @@ describe("DISMISS", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({ status: "success" }),
+          "upload-1": createRenderVerticalEntry({ status: "success" }),
         },
       }),
       { type: "DISMISS", uploadId: "upload-1" }
@@ -393,14 +384,14 @@ describe("DISMISS", () => {
   });
 
   it("should not affect other uploads", () => {
-    const upload2 = createYouTubeEntry({
+    const upload2 = createRenderVerticalEntry({
       uploadId: "upload-2",
       videoId: "video-2",
     });
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry(),
+          "upload-1": createRenderVerticalEntry(),
           "upload-2": upload2,
         },
       }),
@@ -412,7 +403,7 @@ describe("DISMISS", () => {
   });
 
   it("should handle dismissing non-existent upload gracefully", () => {
-    const upload1 = createYouTubeEntry();
+    const upload1 = createRenderVerticalEntry();
     const state = reduce(createState({ uploads: { "upload-1": upload1 } }), {
       type: "DISMISS",
       uploadId: "non-existent",
@@ -425,7 +416,7 @@ describe("DISMISS", () => {
     const state = reduce(
       createState({
         uploads: {
-          "upload-1": createYouTubeEntry({
+          "upload-1": createRenderVerticalEntry({
             status: "uploading",
             progress: 50,
           }),

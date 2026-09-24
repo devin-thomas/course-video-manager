@@ -20,7 +20,7 @@ import { resolveExportPath } from "@/services/export-hash";
 import { sidecarPath } from "@/services/export-sha256-sidecar";
 import { SOUND_FAKE_EXPORT_DURATION_IN_SECONDS } from "@/test-utils/fake-video-processing";
 import {
-  fakeDropbox,
+  fakeDrive,
   finishedVideosDir,
   setupPublishServiceTests,
   setupPublishableCourse as setup,
@@ -39,13 +39,12 @@ const publish = (courseId: string, versionName: string) =>
     });
   });
 
-/** The `.mp4` bytes the most recent Publish put in Dropbox. */
-const shippedVideoBytes = () => {
-  const mp4s = Array.from(fakeDropbox.files.values()).filter((stored) =>
-    stored.pathDisplay.endsWith(".mp4")
-  );
-  return mp4s.map((stored) => stored.content.toString("utf-8"));
-};
+/** The `.mp4` bytes the most recent Publish put in Google Drive. */
+const shippedVideoBytes = () =>
+  fakeDrive
+    .tree()
+    .filter(({ path }) => path.endsWith(".mp4"))
+    .map(({ item }) => item.content.toString("utf-8"));
 
 const TRUNCATED_BYTES = "an-export-made-before-anything-measured-it";
 

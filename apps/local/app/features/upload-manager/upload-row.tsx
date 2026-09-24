@@ -4,7 +4,6 @@ import {
   RefreshCw,
   Upload,
   X,
-  ExternalLink,
   Cloud,
   Send,
   Film,
@@ -55,17 +54,6 @@ function StatusIcon({ upload }: { upload: uploadReducer.UploadEntry }) {
     case "waiting":
       return <Clock className="size-4 text-muted-foreground shrink-0" />;
     case "uploading":
-      if (upload.uploadType === "buffer") {
-        switch (upload.bufferStage) {
-          case "creating-post":
-          case "polling":
-            return <Send className="size-4 text-blue-500 shrink-0" />;
-          case "cleaning-up":
-            return <Cloud className="size-4 text-blue-500 shrink-0" />;
-          default:
-            return <Upload className="size-4 text-blue-500 shrink-0" />;
-        }
-      }
       if (upload.uploadType === "export") {
         return upload.videoUploadStage ? (
           <Cloud className="size-4 text-blue-500 shrink-0" />
@@ -182,40 +170,14 @@ function UploadStatusDetail({ upload }: { upload: uploadReducer.UploadEntry }) {
 /** Where a finished job landed, plus a link to it when there is one to give. */
 function SuccessDetail({ upload }: { upload: uploadReducer.UploadEntry }) {
   switch (upload.uploadType) {
-    case "buffer":
-      return <SuccessBadge label="Sent to Buffer" />;
     case "export":
       // A per-Video task under a Publish did not stop at the export: it also
-      // shipped the file to Dropbox.
+      // shipped the file to Google Drive.
       return (
         <SuccessBadge label={upload.parentUploadId ? "Uploaded" : "Exported"} />
       );
     case "publish":
       return <SuccessBadge label="Published" />;
-    case "ai-hero":
-      return (
-        <SuccessBadge label="Posted to AI Hero">
-          {upload.aiHeroSlug && (
-            <SuccessLink href={`https://aihero.dev/${upload.aiHeroSlug}`}>
-              View Post
-            </SuccessLink>
-          )}
-        </SuccessBadge>
-      );
-    case "youtube":
-      return (
-        <SuccessBadge label="Complete">
-          {upload.youtubeVideoId && (
-            <SuccessLink
-              href={`https://studio.youtube.com/video/${upload.youtubeVideoId}/edit`}
-            >
-              YouTube Studio
-            </SuccessLink>
-          )}
-        </SuccessBadge>
-      );
-    case "youtube-shorts":
-    case "skills-changelog":
     case "render-vertical":
       return <SuccessBadge label="Complete" />;
   }
@@ -238,26 +200,5 @@ function SuccessBadge({
       </Badge>
       {children}
     </div>
-  );
-}
-
-function SuccessLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {children}
-      <ExternalLink className="size-3" />
-    </a>
   );
 }

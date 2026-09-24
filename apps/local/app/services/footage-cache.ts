@@ -47,7 +47,7 @@ export const sidecarPathFor = (sourcePath: string): string =>
  * Streams through Effect's `FileSystem` (not raw `node:fs`) so the read is
  * DI-injectable and its I/O failures land in the typed error channel as a
  * `PlatformError`, consistent with the rest of this module (see
- * CODING_STANDARDS.md — prefer Effect primitives over promises/callbacks).
+ * docs/agents/coding-standards.md — prefer Effect primitives over promises/callbacks).
  */
 export const computeFileContentHash = (
   sourcePath: string

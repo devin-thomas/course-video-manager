@@ -1,12 +1,5 @@
 import type { uploadReducer } from "./upload-reducer";
 
-const BUFFER_STAGE_LABELS: Record<uploadReducer.BufferStage, string> = {
-  "uploading-blob": "Uploading to cloud",
-  "creating-post": "Creating Buffer post",
-  polling: "Waiting for delivery",
-  "cleaning-up": "Cleaning up",
-};
-
 const EXPORT_STAGE_LABELS: Record<uploadReducer.ExportStage, string> = {
   queued: "Queued",
   "concatenating-clips": "Concatenating clips",
@@ -18,13 +11,13 @@ const VIDEO_UPLOAD_STAGE_LABELS: Record<
   string
 > = {
   "queued-for-upload": "Waiting to upload",
-  uploading: "Uploading to Dropbox",
+  uploading: "Uploading to Google Drive",
 };
 
 const PUBLISH_STAGE_LABELS: Record<uploadReducer.PublishStage, string> = {
   validating: "Validating",
   exporting: "Exporting videos",
-  uploading: "Uploading to Dropbox",
+  uploading: "Uploading to Google Drive",
   freezing: "Freezing version",
   cloning: "Creating new draft",
   complete: "Finishing up",
@@ -72,10 +65,6 @@ export function uploadStageLabel(
     case "autofill":
       return upload.autofillStage
         ? AUTOFILL_STAGE_LABELS[upload.autofillStage]
-        : null;
-    case "buffer":
-      return upload.bufferStage
-        ? BUFFER_STAGE_LABELS[upload.bufferStage]
         : null;
     case "render-vertical":
       return upload.renderVerticalStage

@@ -31,9 +31,9 @@ export type PublishDetailEvent =
         percent: number;
       };
     }
-  // Per-lesson upload percentage from the Dropbox commit.
+  // Per-lesson upload percentage from the Commit.
   | { event: "progress"; data: { percentage: number } }
-  // ── The Dropbox upload, one task per shipping Video ──────────────────────
+  // ── The upload, one task per shipping Video ──────────────────────────────
   // Every Video this Publish ships, titled section/lesson/title. Unlike the
   // export `videos` roster above this is the WHOLE bundle: a Video a previous
   // run already exported does no encoding but still has to be uploaded, so it
@@ -55,7 +55,7 @@ export type PublishDetailEvent =
   | { event: "upload-video-complete"; data: { videoId: string; bytes: number } }
   | { event: "upload-video-error"; data: { videoId: string; message: string } }
   // ── Reuse from the previously Published Bundle ───────────────────────────
-  // There is no upfront announcement of the reusable set. Which Videos Dropbox
+  // There is no upfront announcement of the reusable set. Which Videos Drive
   // can copy from its own storage is decided by their BYTES, and a Video's
   // bytes are not known until its own export has landed, so the set only
   // exists one Video at a time (issue #1562).
@@ -97,7 +97,7 @@ export const extractErrorMessage = (e: unknown, fallback: string): string =>
 //
 // `onVideoSettled` is the HANDOFF out of the export pool: it fires once a
 // Video's export has finally succeeded or failed, and is what lets a
-// downstream pool (the Dropbox upload pool) start on that one Video while its
+// downstream pool (the upload pool) start on that one Video while its
 // siblings are still encoding. It runs inside the fan-out, so it is reached as
 // soon as that Video settles rather than when the loop as a whole finishes.
 export const runObservedExportLoop = <A, E, R>(input: {

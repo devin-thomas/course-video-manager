@@ -1,6 +1,6 @@
 /**
  * Regression tests for the clips-during-publish race (issues #1349/#1403),
- * deliberately independent of the Dropbox publish path: "publish" here is just
+ * deliberately independent of the Google Drive upload: "publish" here is just
  * Submit (freezeAndCloneVersion), which is the only step a clip write can race.
  *
  * The locked design: every guarded write runs its draft-guard check and its

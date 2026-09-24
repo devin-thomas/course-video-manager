@@ -25,12 +25,11 @@
     "db:verify-features": "tsx scripts/verify-schema-features.ts",
     "db:backfill-search-text": "tsx scripts/backfill-search-text.ts",
     "gen:lucide-icons": "tsx scripts/generate-lucide-icons.ts",
-    "db:clone-local": "./scripts/clone-db-to-local.sh"
+    "db:clone-local": "bash ./scripts/clone-db-to-local.sh"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.0",
     "@ai-sdk/react": "^3.0.0",
-    "@aws-sdk/client-s3": "^3.716.0",
     "@cvm/core": "workspace:*",
     "@cvm/lucide-icons": "workspace:*",
     "@cvm/overlay-renderer": "workspace:*",

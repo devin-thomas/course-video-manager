@@ -5,11 +5,14 @@ import { z } from "zod";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { runWithExtraction } from "../run-with-extraction";
+import { resolveConfig } from "../resolve-config";
+import { resolveProvider } from "../resolve-provider";
 
 const PR_NUMBER = required("PR_NUMBER");
 const BRANCH = required("BRANCH");
 const BASE_REF = required("BASE_REF");
 const OUTPUT_DIR = process.env.OUTPUT_DIR ?? "/tmp";
+const provider = resolveProvider(resolveConfig());
 
 execFileSync("git", ["fetch", "origin", BASE_REF], { stdio: "inherit" });
 
@@ -45,13 +48,13 @@ const PromptOutput = z.object({
   comment: z.string().min(1),
 });
 
+const PR_VIEW = sh(`gh pr view ${PR_NUMBER}`).trim();
+const MERGE_STATUS = sh("git status").trim();
+const CONFLICTING_FILES = mergeResult.conflicts.join("\n");
+
 const result = await runWithExtraction({
   name: `update-branch-pr-${PR_NUMBER}`,
-  agent: sandcastle.claudeCode("claude-opus-5", {
-    env: {
-      CLAUDE_CODE_OAUTH_TOKEN: required("CLAUDE_CODE_OAUTH_TOKEN"),
-    },
-  }),
+  agent: provider,
   sandbox: noSandbox(),
   logging: { type: "stdout" },
   promptFile: path.join(import.meta.dirname, "prompt.md"),
@@ -59,6 +62,9 @@ const result = await runWithExtraction({
     PR_NUMBER,
     BRANCH,
     BASE_REF,
+    PR_VIEW,
+    MERGE_STATUS,
+    CONFLICTING_FILES,
   },
   output: sandcastle.Output.object({
     tag: "output",
@@ -85,8 +91,7 @@ writePush();
 console.log(`Agent resolved conflicts. Wrapper will push ${postSha}.`);
 
 function tryMerge():
-  | { status: "clean" }
-  | { status: "conflict"; conflicts: string[] } {
+  { status: "clean" } | { status: "conflict"; conflicts: string[] } {
   try {
     execFileSync("git", ["merge", `origin/${BASE_REF}`, "--no-edit"], {
       stdio: "inherit",

@@ -61,14 +61,14 @@ describe("publish failure handling", () => {
       abortControllers
     );
     clients.publishCallbacks!.onError!(
-      "Publish discarded: the Dropbox commit failed (after one retry). Nothing was lost — your edits are safe in the Draft. Publish again when Dropbox is reachable"
+      "Publish discarded: the upload to Google Drive failed (after one retry). Nothing was lost — your edits are safe in the Draft. Publish again when Google Drive is reachable"
     );
 
     expect(dispatch).toHaveBeenCalledWith({
       type: "UPLOAD_FATAL_ERROR",
       uploadId: "upload-1",
       errorMessage:
-        "Publish discarded: the Dropbox commit failed (after one retry). Nothing was lost — your edits are safe in the Draft. Publish again when Dropbox is reachable. Publish status may be unknown, so refresh before starting another publish.",
+        "Publish discarded: the upload to Google Drive failed (after one retry). Nothing was lost — your edits are safe in the Draft. Publish again when Google Drive is reachable. Publish status may be unknown, so refresh before starting another publish.",
     });
     expect(clients.startPublish).toHaveBeenCalledTimes(1);
   });
@@ -120,7 +120,7 @@ describe("publish failure handling", () => {
       { id: "vid-1", title: "01-intro/01.01-welcome/Problem" },
       { id: "vid-2", title: "01-intro/01.02-setup/Solution" },
     ]);
-    // vid-2 has already been shipped to Dropbox when the publish dies — its
+    // vid-2 has already been shipped to Google Drive when the publish dies — its
     // task is settled. vid-1 has only finished encoding, which does NOT settle
     // it: the same task carries on into its upload.
     clients.publishCallbacks!.onVideoUploadQueued!("vid-1");

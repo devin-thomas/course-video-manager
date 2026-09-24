@@ -1,20 +1,19 @@
-import * as sandcastle from "@ai-hero/sandcastle";
+import { run } from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import * as path from "node:path";
+import { resolveConfig } from "../resolve-config";
+import { resolveProvider } from "../resolve-provider";
 
 const PRD_NUMBER = required("PRD_NUMBER");
 const PRD_TITLE = required("PRD_TITLE");
 const SUB_ISSUE_NUMBER = required("SUB_ISSUE_NUMBER");
 const SUB_ISSUE_TITLE = required("SUB_ISSUE_TITLE");
 const BRANCH = required("BRANCH");
+const provider = resolveProvider(resolveConfig());
 
-const result = await sandcastle.run({
+const result = await run({
   name: `implement-prd-#${PRD_NUMBER}-sub-#${SUB_ISSUE_NUMBER}`,
-  agent: sandcastle.claudeCode("claude-opus-5", {
-    env: {
-      CLAUDE_CODE_OAUTH_TOKEN: required("CLAUDE_CODE_OAUTH_TOKEN"),
-    },
-  }),
+  agent: provider,
   sandbox: noSandbox(),
   logging: { type: "stdout" },
   promptFile: path.join(import.meta.dirname, "prompt.md"),

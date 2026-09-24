@@ -66,7 +66,7 @@ export const courses = createTable(
  *   that accepts section/lesson/video/clip writes.
  * - `pending`: Submitted for publish — name/description stamped, a fresh
  *   Draft cloned. At most one Pending per course. A Pending is either
- *   Promoted (its Dropbox `course.json` rename committed) or Discarded.
+ *   Promoted (its `course.json` Commit receipt landed) or Discarded.
  * - `published`: immutable, never deleted.
  * The database is authoritative for this state; no positional/name-based
  * inference (see issue #1348).
@@ -788,7 +788,12 @@ export const coursesRelations = relations(courses, ({ many }) => ({
   deliverablesCourses: many(deliverablesCourses),
 }));
 
-export { youtubeAuth, aiHeroAuth, dropboxAuth } from "./schema-auth.js";
+export {
+  youtubeAuth,
+  aiHeroAuth,
+  dropboxAuth,
+  googleDriveAuth,
+} from "./schema-auth.js";
 export { apiTokens } from "./schema-api-token.js";
 
 // Global links table for article writing

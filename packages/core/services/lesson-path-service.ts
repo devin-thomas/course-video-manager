@@ -4,7 +4,7 @@
  * A lesson's display path is its slugified title (e.g. "My Lesson" →
  * "my-lesson") — no ordering number. Order is carried by the `order` column
  * and by array position in `course.json`; the path exists purely for
- * filesystem legibility (the Dropbox bundle's directory layout, ADR 0023),
+ * filesystem legibility (the Bundle's directory layout, ADR 0023),
  * so it never needs to change when a lesson is reordered or moved between
  * sections. Collisions between same-titled sibling lessons are disambiguated
  * at the point paths are projected (`path-projection.ts`), not here.

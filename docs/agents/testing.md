@@ -10,7 +10,7 @@ You already know which file(s) you edited and which test(s) cover them — a col
 pnpm --filter <package> test -- path/to/thing.test.ts
 ```
 
-e.g. `pnpm --filter @cvm/core test -- db/lessons/archive.test.ts`. `pnpm --filter` forwards anything after `--` straight to the package's `vitest run`, so it narrows to that one file (or a handful, space-separated) instead of the whole package. Package names are each `package.json`'s `name` field (`@cvm/core`, `@cvm/local`, `@cvm/remote`, `@cvm/lucide-icons`).
+e.g. `pnpm --filter @cvm/core test -- db/lessons/archive.test.ts`. `pnpm --filter` forwards anything after `--` straight to the package's `vitest run`, so it narrows to that one file (or a handful, space-separated) instead of the whole package. Package names are each `package.json`'s `name` field (`@cvm/core`, `@cvm/local`, `@cvm/remote`, `@cvm/lucide-icons`; `@cvm/overlay-renderer` is outside the root filters — run its scripts from its own directory).
 
 Root-level `.sandcastle` tests are the one exception: run them via `pnpm run test:root path/to/thing.test.ts` — **no `--`**. At the repo root, `pnpm run <script> -- <args>` (unlike `pnpm --filter <pkg> <script> -- <args>`) forwards a literal `"--"` through to vitest along with your path, which silently runs the whole root suite instead of narrowing — confirmed on pnpm 9.12.3. Dropping the `--` narrows correctly.
 
@@ -18,7 +18,12 @@ This is deliberately manual rather than diff-derived — no `turbo --affected`, 
 
 ## The full suite: CI, not you
 
-`.github/workflows/test.yml` runs `typecheck`, `lint:boundaries` and the **unfiltered** `pnpm run test` on every PR — every package, every test file, every time. That's what makes it safe to stay targeted locally: nothing merges without the exhaustive run passing regardless of what you ran (or skipped) by hand. Reach for the full `pnpm run test` yourself only if you have a specific reason to distrust your own targeting for this change (e.g. you suspect a cross-package regression the test files you picked wouldn't catch).
+[`.github/workflows/test.yml`](../../.github/workflows/test.yml) runs on **every push to any branch and every pull request** in `devin-thomas/course-video-manager`, on `ubuntu-latest` with Node from `.node-version` and pnpm from `packageManager`:
+
+- **`test` job** — `pnpm install --frozen-lockfile`, then `pnpm run typecheck`, `pnpm run lint:boundaries` and the **unfiltered** `pnpm run test` (every turbo-filtered package plus the root `.sandcastle`/`tests` suite — every test file, every time). ffmpeg is installed from apt so `overlay-composite-ffmpeg-graph.test.ts` really runs instead of skipping itself.
+- **`overlay-renderer` job** — `@cvm/overlay-renderer`'s own `typecheck` and `test`, run from its directory, since the root filters exclude it.
+
+No secrets and no database service: DB-backed tests run over in-process PGlite. That's what makes it safe to stay targeted locally: nothing merges without the exhaustive run passing regardless of what you ran (or skipped) by hand. If a change only fails there, reproduce with the one failing file locally before touching anything else. Reach for the full `pnpm run test` yourself only if you have a specific reason to distrust your own targeting for this change (e.g. you suspect a cross-package regression the test files you picked wouldn't catch).
 
 ## Known noise: `packages/core`'s PGlite suite can look flaky under load
 

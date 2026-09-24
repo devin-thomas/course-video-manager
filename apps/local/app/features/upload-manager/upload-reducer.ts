@@ -6,14 +6,12 @@ import type { RenderVerticalStage as RenderVerticalServiceStage } from "@/servic
 import { uploadTypeRegistry } from "./upload-type-registry";
 import {
   AUTOFILL_STAGE_BANDS,
-  BUFFER_STAGE_BANDS,
   PUBLISH_STAGE_BANDS,
   PUBLISH_VIDEO_UPLOAD_BANDS,
   RENDER_VERTICAL_STAGE_BANDS,
   exportStageBands,
   fillBand,
   isSettled,
-  streamedProgressBand,
   withDerivedParentProgress,
 } from "./upload-progress";
 
@@ -21,17 +19,7 @@ export namespace uploadReducer {
   export type UploadStatus =
     "waiting" | "uploading" | "retrying" | "success" | "error";
   export type UploadType =
-    | "youtube"
-    | "youtube-shorts"
-    | "buffer"
-    | "ai-hero"
-    | "skills-changelog"
-    | "export"
-    | "publish"
-    | "autofill"
-    | "render-vertical";
-  export type BufferStage =
-    "uploading-blob" | "creating-post" | "polling" | "cleaning-up";
+    "export" | "publish" | "autofill" | "render-vertical";
   // Every stage union below is the SERVICE's own union, never a restatement of
   // it. The bands and the labels are total `Record`s over these types, so a
   // stage the server emits and the client has no band for is a compile error
@@ -70,37 +58,12 @@ export namespace uploadReducer {
     parentUploadId: string | null;
   }
 
-  export interface YouTubeUploadEntry extends BaseUploadEntry {
-    uploadType: "youtube";
-    youtubeVideoId: string | null;
-  }
-
-  export interface YouTubeShortsUploadEntry extends BaseUploadEntry {
-    uploadType: "youtube-shorts";
-    youtubeVideoId: string | null;
-  }
-
-  export interface BufferUploadEntry extends BaseUploadEntry {
-    uploadType: "buffer";
-    bufferStage: BufferStage | null;
-  }
-
-  export interface AiHeroUploadEntry extends BaseUploadEntry {
-    uploadType: "ai-hero";
-    aiHeroSlug: string | null;
-  }
-
-  export interface SkillsChangelogUploadEntry extends BaseUploadEntry {
-    uploadType: "skills-changelog";
-    skillsChangelogSlug: string | null;
-  }
-
   export interface ExportUploadEntry extends BaseUploadEntry {
     uploadType: "export";
     exportStage: ExportStage | null;
     isBatchEntry: boolean;
     // Set only for a per-Video task under a Publish, which carries on into
-    // Dropbox once its encode is done. A standalone export has nowhere to
+    // Google Drive once its encode is done. A standalone export has nowhere to
     // upload to and leaves these at their defaults.
     videoUploadStage: VideoUploadStage | null;
     uploadedBytes: number;
@@ -135,11 +98,6 @@ export namespace uploadReducer {
   }
 
   export type UploadEntry =
-    | YouTubeUploadEntry
-    | YouTubeShortsUploadEntry
-    | BufferUploadEntry
-    | AiHeroUploadEntry
-    | SkillsChangelogUploadEntry
     | ExportUploadEntry
     | PublishUploadEntry
     | AutofillUploadEntry
@@ -155,18 +113,13 @@ export namespace uploadReducer {
         uploadId: string;
         videoId: string;
         title: string;
-        uploadType?: UploadType;
+        uploadType: UploadType;
         dependsOn?: string;
         isBatchEntry?: boolean;
         courseId?: string;
         parentUploadId?: string;
       }
     | { type: "UPDATE_PROGRESS"; uploadId: string; progress: number }
-    | {
-        type: "UPDATE_BUFFER_STAGE";
-        uploadId: string;
-        stage: BufferStage;
-      }
     | {
         type: "UPDATE_EXPORT_STAGE";
         uploadId: string;
@@ -184,9 +137,6 @@ export namespace uploadReducer {
     | {
         type: "UPLOAD_SUCCESS";
         uploadId: string;
-        youtubeVideoId?: string;
-        aiHeroSlug?: string;
-        skillsChangelogSlug?: string;
       }
     | { type: "UPLOAD_ERROR"; uploadId: string; errorMessage: string }
     | { type: "UPLOAD_FATAL_ERROR"; uploadId: string; errorMessage: string }
@@ -248,7 +198,7 @@ const reduceUploads = (
 ): uploadReducer.State => {
   switch (action.type) {
     case "START_UPLOAD": {
-      const uploadType = action.uploadType ?? "youtube";
+      const uploadType = action.uploadType;
       const dependsOn = action.dependsOn ?? null;
       const status = dependsOn ? ("waiting" as const) : ("uploading" as const);
       const base: uploadReducer.BaseUploadEntry = {
@@ -283,41 +233,15 @@ const reduceUploads = (
       // number streamed at the job as a whole may move it.
       if (upload.uploadType === "publish") return state;
 
-      const band = streamedProgressBand(upload);
-
       return {
         ...state,
         uploads: {
           ...state.uploads,
           [action.uploadId]: {
             ...upload,
-            // Monotonic, like UPDATE_EXPORT_PROGRESS: a stage that streams a
-            // real percentage fills its own band, so finishing one stage can
-            // never drag the bar back below where the next stage starts.
-            progress: Math.max(
-              upload.progress,
-              band ? fillBand(band, action.progress) : action.progress
-            ),
-          },
-        },
-      };
-    }
-
-    case "UPDATE_BUFFER_STAGE": {
-      const upload = state.uploads[action.uploadId];
-      if (!upload || upload.uploadType !== "buffer") return state;
-
-      return {
-        ...state,
-        uploads: {
-          ...state.uploads,
-          [action.uploadId]: {
-            ...upload,
-            bufferStage: action.stage,
-            progress: Math.max(
-              upload.progress,
-              BUFFER_STAGE_BANDS[action.stage].start
-            ),
+            // Monotonic, like UPDATE_EXPORT_PROGRESS: a number streamed at
+            // a job can never drag its bar backwards.
+            progress: Math.max(upload.progress, action.progress),
           },
         },
       };
@@ -370,7 +294,7 @@ const reduceUploads = (
     case "UPDATE_VIDEO_UPLOAD_STAGE": {
       const upload = state.uploads[action.uploadId];
       if (!upload || upload.uploadType !== "export") return state;
-      // The Dropbox commit is retried once server-side, which replays these
+      // The Commit is retried once server-side, which replays these
       // events for Videos that already landed. A settled task stays settled.
       if (isSettled(upload)) return state;
 

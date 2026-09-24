@@ -188,7 +188,7 @@ export const exportVideoToItsAddress = Effect.fn("exportVideoToItsAddress")(
     // Composite the Definition Cards on, once the export is known to be a
     // whole one. A Video with no Overlays never runs this pass at all, so its
     // bytes are exactly what they were before Overlays existed — which is
-    // also what keeps its Byte Hash, and so its place in Dropbox, unmoved.
+    // also what keeps its Byte Hash, and so its place in the Bundle, unmoved.
     if (placedOverlays.length > 0) {
       yield* Effect.gen(function* () {
         // Every Overlay's content is rendered (or found already rendered)
@@ -252,7 +252,7 @@ export const exportVideoToItsAddress = Effect.fn("exportVideoToItsAddress")(
     yield* effectFs.rename(videoIdPath, targetPath);
 
     // Digest it now, while it is the newest thing on the disk. A later
-    // Publish that copies this Video inside Dropbox rather than uploading
+    // Publish that copies this Video inside Google Drive rather than uploading
     // it never streams the bytes, so this is the only moment they are
     // guaranteed to pass through our hands.
     yield* ensureExportDigest(effectFs, targetPath, rendered.durationInSeconds);

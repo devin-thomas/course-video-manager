@@ -8,19 +8,19 @@ Read `CONTEXT.md` and any relevant ADRs under `docs/adr/` before resolving anyth
 
 <pr-view>
 
-!`gh pr view {{PR_NUMBER}}`
+{{PR_VIEW}}
 
 </pr-view>
 
 <merge-status>
 
-!`git status`
+{{MERGE_STATUS}}
 
 </merge-status>
 
 <conflicting-files>
 
-!`git diff --name-only --diff-filter=U`
+{{CONFLICTING_FILES}}
 
 </conflicting-files>
 

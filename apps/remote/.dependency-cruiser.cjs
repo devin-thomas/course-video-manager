@@ -57,7 +57,7 @@ module.exports = {
     {
       name: "remote-cannot-reach-third-party-credentials",
       comment:
-        "The YouTube, Dropbox and AI Hero credentials live in the same database because they must, but they get NO RPC surface — so a leaked API token cannot become a leaked YouTube refresh token. That guarantee is 'these endpoints do not exist', and LinkAuthOperationsService is the door. (The TABLES are unavoidably reachable: Drizzle needs the whole schema to open a connection. This rule guards the service, which is the only thing that reads them.)",
+        "The OAuth credentials (google_drive_auth, and the unused dropbox_auth, youtube_auth and ai_hero_auth tables) live in the same database because they must, but they get NO RPC surface — so a leaked API token cannot become a leaked Google Drive refresh token. That guarantee is 'these endpoints do not exist', and LinkAuthOperationsService is the door. (The TABLES are unavoidably reachable: Drizzle needs the whole schema to open a connection. This rule guards the service, which is the only thing that reads them.)",
       severity: "error",
       from: {},
       to: { path: "db-link-auth-operations" },

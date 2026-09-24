@@ -40,6 +40,11 @@ export interface PublishActionInput {
   readonly hasVersionDescription: boolean;
   readonly autofillRunning: boolean;
   readonly publishRunning: boolean;
+  /**
+   * Google Drive is connected. Without it the Commit is certain to fail, so a
+   * Publish would only Submit a Version to Discard it again.
+   */
+  readonly storageConnected: boolean;
 }
 
 export const decidePublishAction = (
@@ -71,6 +76,7 @@ export const decidePublishAction = (
     enabled:
       !input.hasBlockers &&
       input.hasVersionDescription &&
+      input.storageConnected &&
       !input.publishRunning &&
       !input.autofillRunning,
   };

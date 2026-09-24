@@ -34,7 +34,7 @@ describe("findVideoUpload", () => {
       uploadId: "yt-1",
       videoId: "video-1",
       title: "My Video",
-      uploadType: "youtube",
+      uploadType: "export",
     });
 
     expect(findVideoUpload(state.uploads, "video-1")?.uploadId).toBe("yt-1");
@@ -52,7 +52,7 @@ describe("findVideoUpload", () => {
       uploadId: "yt-1",
       videoId: "video-1",
       title: "My Video",
-      uploadType: "youtube",
+      uploadType: "export",
     });
 
     expect(findVideoUpload(state.uploads, "video-1")?.uploadId).toBe("yt-1");

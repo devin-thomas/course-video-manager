@@ -11,34 +11,18 @@ const createState = (
   ...overrides,
 });
 
-const createYouTubeEntry = (
-  overrides: Partial<Omit<uploadReducer.YouTubeUploadEntry, "uploadType">> = {}
-): uploadReducer.YouTubeUploadEntry => ({
+const createRenderVerticalEntry = (
+  overrides: Partial<
+    Omit<uploadReducer.RenderVerticalUploadEntry, "uploadType">
+  > = {}
+): uploadReducer.RenderVerticalUploadEntry => ({
   uploadId: "upload-1",
   videoId: "video-1",
   title: "Test Video",
   progress: 0,
   status: "uploading",
-  uploadType: "youtube",
-  youtubeVideoId: null,
-  errorMessage: null,
-  retryCount: 0,
-  terminal: false,
-  dependsOn: null,
-  parentUploadId: null,
-  ...overrides,
-});
-
-const createBufferEntry = (
-  overrides: Partial<Omit<uploadReducer.BufferUploadEntry, "uploadType">> = {}
-): uploadReducer.BufferUploadEntry => ({
-  uploadId: "upload-1",
-  videoId: "video-1",
-  title: "Test Video",
-  progress: 0,
-  status: "uploading",
-  uploadType: "buffer",
-  bufferStage: null,
+  uploadType: "render-vertical",
+  renderVerticalStage: null,
   errorMessage: null,
   retryCount: 0,
   terminal: false,
@@ -88,35 +72,6 @@ const isMonotonic = (values: number[]) =>
 // stage handover that lowers `progress` is visible as the bar running
 // backwards. These walk the event orders the SSE clients really produce.
 describe("progress never runs backwards", () => {
-  it("keeps the buffer bar climbing once the blob upload reports 100%", () => {
-    // sse-social-client re-announces "uploading-blob" with each percentage, so
-    // the blob finishing at 100% used to leave `progress` above the fixed 50
-    // that "creating-post" then assigned.
-    const seen = progressOver(createBufferEntry(), [
-      {
-        type: "UPDATE_BUFFER_STAGE",
-        uploadId: "upload-1",
-        stage: "uploading-blob",
-      },
-      { type: "UPDATE_PROGRESS", uploadId: "upload-1", progress: 0 },
-      { type: "UPDATE_PROGRESS", uploadId: "upload-1", progress: 100 },
-      {
-        type: "UPDATE_BUFFER_STAGE",
-        uploadId: "upload-1",
-        stage: "creating-post",
-      },
-      { type: "UPDATE_BUFFER_STAGE", uploadId: "upload-1", stage: "polling" },
-      {
-        type: "UPDATE_BUFFER_STAGE",
-        uploadId: "upload-1",
-        stage: "cleaning-up",
-      },
-    ]);
-
-    expect(isMonotonic(seen)).toBe(true);
-    expect(seen.at(-1)).toBe(90);
-  });
-
   it("keeps the publish bar climbing across the prologue and into the work", () => {
     // The real emission order: validate, Submit (freeze then clone), and only
     // then the overlapping export and upload.
@@ -154,21 +109,8 @@ describe("progress never runs backwards", () => {
     expect(seen).toEqual([40, 40]);
   });
 
-  it("ignores a late progress event from a stage the job has left", () => {
-    const seen = progressOver(createBufferEntry({ bufferStage: "polling" }), [
-      {
-        type: "UPDATE_BUFFER_STAGE",
-        uploadId: "upload-1",
-        stage: "cleaning-up",
-      },
-      { type: "UPDATE_PROGRESS", uploadId: "upload-1", progress: 10 },
-    ]);
-
-    expect(seen.at(-1)).toBe(90);
-  });
-
   it("still streams a real percentage straight through for a plain upload", () => {
-    const seen = progressOver(createYouTubeEntry(), [
+    const seen = progressOver(createRenderVerticalEntry(), [
       { type: "UPDATE_PROGRESS", uploadId: "upload-1", progress: 37 },
       { type: "UPDATE_PROGRESS", uploadId: "upload-1", progress: 82 },
     ]);

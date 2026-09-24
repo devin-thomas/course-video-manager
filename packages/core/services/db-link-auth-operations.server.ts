@@ -1,5 +1,5 @@
 import { DrizzleService, type Database } from "./drizzle-service.server.js";
-import { links, youtubeAuth, aiHeroAuth, dropboxAuth } from "../db/schema.js";
+import { links, googleDriveAuth } from "../db/schema.js";
 import { NotFoundError, UnknownDBServiceError } from "./db-service-errors.js";
 import { desc, eq } from "drizzle-orm";
 import { Effect } from "effect";
@@ -51,204 +51,92 @@ export const createLinkAuthOperations = (db: Database) => {
     return { success: true };
   });
 
-  const getYoutubeAuth = Effect.fn("getYoutubeAuth")(function* () {
-    const auth = yield* makeDbCall(() => db.query.youtubeAuth.findFirst());
+  const getGoogleDriveAuth = Effect.fn("getGoogleDriveAuth")(function* () {
+    const auth = yield* makeDbCall(() => db.query.googleDriveAuth.findFirst());
     return auth ?? null;
   });
 
-  const upsertYoutubeAuth = Effect.fn("upsertYoutubeAuth")(function* (tokens: {
-    accessToken: string;
-    refreshToken: string;
-    expiresAt: Date;
-  }) {
-    yield* makeDbCall(() => db.delete(youtubeAuth));
+  const upsertGoogleDriveAuth = Effect.fn("upsertGoogleDriveAuth")(
+    function* (tokens: {
+      accessToken: string;
+      refreshToken: string;
+      expiresAt: Date;
+    }) {
+      yield* makeDbCall(() => db.delete(googleDriveAuth));
 
-    const [newAuth] = yield* makeDbCall(() =>
-      db
-        .insert(youtubeAuth)
-        .values({
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-          expiresAt: tokens.expiresAt,
-        })
-        .returning()
-    );
-
-    if (!newAuth) {
-      return yield* new UnknownDBServiceError({
-        cause: "No YouTube auth was returned from the database",
-      });
-    }
-
-    return newAuth;
-  });
-
-  const updateYoutubeAccessToken = Effect.fn("updateYoutubeAccessToken")(
-    function* (tokens: { accessToken: string; expiresAt: Date }) {
-      const existing = yield* makeDbCall(() =>
-        db.query.youtubeAuth.findFirst()
-      );
-
-      if (!existing) {
-        return yield* new NotFoundError({
-          type: "updateYoutubeAccessToken",
-          params: {},
-          message: "No YouTube auth found to update",
-        });
-      }
-
-      const [updated] = yield* makeDbCall(() =>
+      const [newAuth] = yield* makeDbCall(() =>
         db
-          .update(youtubeAuth)
-          .set({
+          .insert(googleDriveAuth)
+          .values({
             accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
             expiresAt: tokens.expiresAt,
-            updatedAt: new Date(),
           })
-          .where(eq(youtubeAuth.id, existing.id))
           .returning()
       );
 
-      if (!updated) {
-        return yield* new NotFoundError({
-          type: "updateYoutubeAccessToken",
-          params: {},
+      if (!newAuth) {
+        return yield* new UnknownDBServiceError({
+          cause: "No Google Drive auth was returned from the database",
         });
       }
 
-      return updated;
+      return newAuth;
     }
   );
 
-  const deleteYoutubeAuth = Effect.fn("deleteYoutubeAuth")(function* () {
-    yield* makeDbCall(() => db.delete(youtubeAuth));
-    return { success: true };
-  });
-
-  const getAiHeroAuth = Effect.fn("getAiHeroAuth")(function* () {
-    const auth = yield* makeDbCall(() => db.query.aiHeroAuth.findFirst());
-    return auth ?? null;
-  });
-
-  const upsertAiHeroAuth = Effect.fn("upsertAiHeroAuth")(function* (params: {
-    accessToken: string;
-    userId: string;
-  }) {
-    yield* makeDbCall(() => db.delete(aiHeroAuth));
-
-    const [newAuth] = yield* makeDbCall(() =>
-      db
-        .insert(aiHeroAuth)
-        .values({
-          accessToken: params.accessToken,
-          userId: params.userId,
-        })
-        .returning()
+  const updateGoogleDriveAccessToken = Effect.fn(
+    "updateGoogleDriveAccessToken"
+  )(function* (tokens: { accessToken: string; expiresAt: Date }) {
+    const existing = yield* makeDbCall(() =>
+      db.query.googleDriveAuth.findFirst()
     );
 
-    if (!newAuth) {
-      return yield* new UnknownDBServiceError({
-        cause: "No AI Hero auth was returned from the database",
+    if (!existing) {
+      return yield* new NotFoundError({
+        type: "updateGoogleDriveAccessToken",
+        params: {},
+        message: "No Google Drive auth found to update",
       });
     }
 
-    return newAuth;
-  });
-
-  const deleteAiHeroAuth = Effect.fn("deleteAiHeroAuth")(function* () {
-    yield* makeDbCall(() => db.delete(aiHeroAuth));
-    return { success: true };
-  });
-
-  const getDropboxAuth = Effect.fn("getDropboxAuth")(function* () {
-    const auth = yield* makeDbCall(() => db.query.dropboxAuth.findFirst());
-    return auth ?? null;
-  });
-
-  const upsertDropboxAuth = Effect.fn("upsertDropboxAuth")(function* (tokens: {
-    accessToken: string;
-    refreshToken: string;
-    expiresAt: Date;
-  }) {
-    yield* makeDbCall(() => db.delete(dropboxAuth));
-
-    const [newAuth] = yield* makeDbCall(() =>
+    const [updated] = yield* makeDbCall(() =>
       db
-        .insert(dropboxAuth)
-        .values({
+        .update(googleDriveAuth)
+        .set({
           accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
           expiresAt: tokens.expiresAt,
+          updatedAt: new Date(),
         })
+        .where(eq(googleDriveAuth.id, existing.id))
         .returning()
     );
 
-    if (!newAuth) {
-      return yield* new UnknownDBServiceError({
-        cause: "No Dropbox auth was returned from the database",
+    if (!updated) {
+      return yield* new NotFoundError({
+        type: "updateGoogleDriveAccessToken",
+        params: {},
       });
     }
 
-    return newAuth;
+    return updated;
   });
 
-  const updateDropboxAccessToken = Effect.fn("updateDropboxAccessToken")(
-    function* (tokens: { accessToken: string; expiresAt: Date }) {
-      const existing = yield* makeDbCall(() =>
-        db.query.dropboxAuth.findFirst()
-      );
-
-      if (!existing) {
-        return yield* new NotFoundError({
-          type: "updateDropboxAccessToken",
-          params: {},
-          message: "No Dropbox auth found to update",
-        });
-      }
-
-      const [updated] = yield* makeDbCall(() =>
-        db
-          .update(dropboxAuth)
-          .set({
-            accessToken: tokens.accessToken,
-            expiresAt: tokens.expiresAt,
-            updatedAt: new Date(),
-          })
-          .where(eq(dropboxAuth.id, existing.id))
-          .returning()
-      );
-
-      if (!updated) {
-        return yield* new NotFoundError({
-          type: "updateDropboxAccessToken",
-          params: {},
-        });
-      }
-
-      return updated;
+  const deleteGoogleDriveAuth = Effect.fn("deleteGoogleDriveAuth")(
+    function* () {
+      yield* makeDbCall(() => db.delete(googleDriveAuth));
+      return { success: true };
     }
   );
-
-  const deleteDropboxAuth = Effect.fn("deleteDropboxAuth")(function* () {
-    yield* makeDbCall(() => db.delete(dropboxAuth));
-    return { success: true };
-  });
 
   return {
     getLinks,
     createLink,
     deleteLink,
-    getYoutubeAuth,
-    upsertYoutubeAuth,
-    updateYoutubeAccessToken,
-    deleteYoutubeAuth,
-    getAiHeroAuth,
-    upsertAiHeroAuth,
-    deleteAiHeroAuth,
-    getDropboxAuth,
-    upsertDropboxAuth,
-    updateDropboxAccessToken,
-    deleteDropboxAuth,
+    getGoogleDriveAuth,
+    upsertGoogleDriveAuth,
+    updateGoogleDriveAccessToken,
+    deleteGoogleDriveAuth,
   };
 };
 

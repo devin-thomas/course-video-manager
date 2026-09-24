@@ -8,8 +8,9 @@ import {
   type PauseType,
 } from "@/services/video-processing-service";
 import { createControllableVideoProcessing } from "@/test-utils/fake-video-processing";
+import { isVideoUploadStart } from "@/test-utils/fake-google-drive";
 import {
-  fakeDropbox,
+  fakeDrive,
   finishedVideosDir,
   setupPublishServiceTests,
   setupPublishableCourse as setup,
@@ -21,27 +22,15 @@ import {
 
 setupPublishServiceTests();
 
-/** Only the `.mp4` uploads inside a bundle. */
-const isVideoUploadRequest = (url: string, init: RequestInit) => {
-  if (!url.includes("/2/files/upload") || url.includes("session")) return false;
-  const arg = (init.headers as Record<string, string> | undefined)?.[
-    "Dropbox-API-Arg"
-  ];
-  return Boolean(arg && JSON.parse(arg).path.endsWith(".mp4"));
-};
+/** The start of one Video's upload into a bundle. */
+const isVideoUploadRequest = isVideoUploadStart;
 
-const uploadOf =
-  (relativeAssetPath: string) => (url: string, init: RequestInit) =>
-    isVideoUploadRequest(url, init) &&
-    JSON.parse(
-      (init.headers as Record<string, string>)["Dropbox-API-Arg"]!
-    ).path.endsWith(`/${relativeAssetPath}`);
+const uploadOf = (relativeAssetPath: string) => (url: URL, init: RequestInit) =>
+  isVideoUploadRequest(url, init) &&
+  fakeDrive.uploadTargetPath(init).endsWith(`/${relativeAssetPath}`);
 
 const remoteBundleVideoPaths = () =>
-  Array.from(fakeDropbox.files.values())
-    .map((stored) => stored.pathDisplay)
-    .filter((remotePath) => remotePath.endsWith(".mp4"))
-    .sort();
+  fakeDrive.filePaths().filter((remotePath) => remotePath.endsWith(".mp4"));
 
 const publish = (courseId: string) =>
   Effect.gen(function* () {
@@ -67,7 +56,7 @@ describe("CoursePublishService — export/upload pipelining", () => {
     });
     const [slow, quick] = videos as [(typeof videos)[0], (typeof videos)[0]];
 
-    const quickUploadStarted = fakeDropbox.waitForRequest(
+    const quickUploadStarted = fakeDrive.waitForRequest(
       uploadOf(quick.relativeAssetPath)
     );
 
@@ -81,7 +70,7 @@ describe("CoursePublishService — export/upload pipelining", () => {
     processing.release(quick.id);
     await quickUploadStarted;
 
-    // The proof: `quick` reached Dropbox without waiting for `slow` to encode.
+    // The proof: `quick` reached Drive without waiting for `slow` to encode.
     expect(processing.isEncoding(slow.id)).toBe(true);
 
     processing.release(slow.id);
@@ -99,7 +88,7 @@ describe("CoursePublishService — export/upload pipelining", () => {
     const { course, videos, run } = await setup({
       videoCount: 6,
       mockVideoProcessing: processing.layer,
-      config: { DROPBOX_UPLOAD_CONCURRENCY: "1" },
+      config: { GOOGLE_DRIVE_UPLOAD_CONCURRENCY: "1" },
     });
 
     const publishing = run(publish(course.id));
@@ -179,11 +168,11 @@ describe("CoursePublishService — export/upload pipelining", () => {
     fs.writeFileSync(stalePath, "an export no Course Version can reach");
 
     // Never trips with a single Video, so uploads stay open until released.
-    const releaseUploads = fakeDropbox.holdUntilInFlight(
+    const releaseUploads = fakeDrive.holdUntilInFlight(
       99,
       isVideoUploadRequest
     );
-    const uploadStarted = fakeDropbox.waitForRequest(isVideoUploadRequest);
+    const uploadStarted = fakeDrive.waitForRequest(isVideoUploadRequest);
 
     const publishing = run(publish(course.id));
     await uploadStarted;

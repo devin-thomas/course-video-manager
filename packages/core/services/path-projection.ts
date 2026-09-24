@@ -41,7 +41,7 @@ type ProjectableLesson = {
  * First occurrence of a slug keeps it bare; each repeat gets a `-2`, `-3`, …
  * suffix, in the order `slugs` is iterated. Titles aren't required to be
  * unique among siblings (ADR 0018 only enforces `order`), but paths are
- * used as real directory names in the Dropbox bundle (ADR 0023), so two
+ * used as real directory names in the Bundle (ADR 0023), so two
  * same-titled siblings must not collide there.
  */
 const dedupeSlugs = (slugs: readonly string[]): string[] => {

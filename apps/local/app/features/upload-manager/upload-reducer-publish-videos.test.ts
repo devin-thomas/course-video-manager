@@ -122,7 +122,7 @@ describe("per-Video tasks under a Publish", () => {
   });
 
   it("ignores replayed upload events for a Video that already landed", () => {
-    // The Dropbox commit is retried once server-side, so a Video that landed
+    // The Commit is retried once server-side, so a Video that landed
     // on the first attempt sees its progress events a second time.
     let state = startedPublish(["vid-1"]);
     state = reduce(state, {

@@ -1,0 +1,93 @@
+name: Test
+
+# The exhaustive gate. Nothing is scoped here on purpose: this is the one place
+# the FULL suite runs unconditionally, on every push and every PR, so it is safe
+# for local/agent runs to stay targeted to the specific test file(s) a change
+# touches (see docs/agents/testing.md) without leaving anything unverified.
+#
+# Needs no secrets and no services: every DB-backed test runs over in-process
+# PGlite (ADR 0014), and nothing here talks to the deployed API.
+on:
+  push:
+  pull_request:
+
+# A newer push to the same ref supersedes the older run.
+concurrency:
+  group: test-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Typecheck, boundaries and the full suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # One test hands the real overlay-compositing graph to the real ffmpeg
+      # (apps/local/app/services/overlay-composite-ffmpeg-graph.test.ts). It
+      # skips itself without ffmpeg, which would make this gate quietly weaker.
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -n 1
+
+      # Version comes from package.json's `packageManager`.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint boundaries
+        run: pnpm run lint:boundaries
+
+      - name: Test
+        run: pnpm run test
+
+  # @cvm/overlay-renderer is excluded from every root turbo filter, so the job
+  # above never covers it; run its own scripts from its own directory. Its
+  # tests are props/timing units only — no render, so no Chromium download.
+  overlay-renderer:
+    name: Overlay renderer (typecheck and test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/overlay-renderer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Test
+        run: pnpm test

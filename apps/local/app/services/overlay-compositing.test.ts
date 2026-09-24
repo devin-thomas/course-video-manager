@@ -361,14 +361,12 @@ describe("buildOverlayCompositeFilterGraph — the camera Transform", () => {
     // spelled to twelve places, because this is the number the preview slides
     // by too and six places would make them different numbers.
     expect(graph).toContain("st(3,lerp(0,0.211458333333,ld(2)))");
-    // The canvas is widened by exactly that travel, on the left, and the
-    // picture is taken back out of it at its own size — so the source is
-    // never magnified.
-    expect(graph).toContain(
-      "pad=w='iw*1.211458333333':h='ih':x='iw*0.211458333333':y='0'"
-    );
-    expect(graph).toContain("crop=w='iw/1.211458333333':h='ih'");
-    expect(graph).toContain("(iw/1.211458333333)*(0.211458333333-ld(3))");
+    // The canvas is widened on the left by a WHOLE source width — room for
+    // that travel, in a size `pad` cannot round — and the picture is taken
+    // back out of it at its own size, so the source is never magnified.
+    expect(graph).toContain("pad=w='iw*2':h='ih':x='iw*1':y='0'");
+    expect(graph).toContain("crop=w='iw/2':h='ih'");
+    expect(graph).toContain("(iw/2)*(1-ld(3))");
     // Nothing divides a dimension by the progress slot any more — that
     // division WAS the zoom.
     expect(graph).not.toContain("iw/ld(3)");

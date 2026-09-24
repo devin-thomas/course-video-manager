@@ -28,8 +28,8 @@
     "db:clone-local": "pnpm --filter @cvm/local run db:clone-local",
     "gen:lucide-icons": "pnpm --filter @cvm/local run gen:lucide-icons",
     "sandcastle": "tsx ./.sandcastle/main.ts",
-    "check:file-tokens": "./scripts/check-file-tokens.sh",
-    "check:no-dirname": "./scripts/check-no-dirname.sh"
+    "check:file-tokens": "bash ./scripts/check-file-tokens.sh",
+    "check:no-dirname": "bash ./scripts/check-no-dirname.sh"
   },
   "pnpm": {
     "overrides": {
@@ -49,11 +49,9 @@
       ]
     }
   },
-  "lint-staged": {
-    "*": "prettier --write"
-  },
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.10.0",
+    "@cursor/sdk": "^1.0.32",
     "@types/node": "^20",
     "@typescript/native-preview": "^7.0.0-dev.20260304.1",
     "husky": "^9.1.7",

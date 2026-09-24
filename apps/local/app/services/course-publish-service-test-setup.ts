@@ -3,10 +3,10 @@
  *
  * The world it builds is real in almost every respect — real PGlite database
  * with the real schema, real Drizzle query layer, real operations services,
- * real filesystem in a temp directory, real publish logic, real Dropbox auth
- * code path against a seeded auth row — with exactly two fakes: the video
+ * real filesystem in a temp directory, real publish logic, real Google Drive
+ * auth code path against a seeded auth row — with exactly two fakes: the video
  * processing service (so no encoding occurs) and global fetch (the in-memory
- * Dropbox fake).
+ * Google Drive fake).
  *
  * The fake renderer can be steered per run — see `renderBytes` and
  * `renderDurationInSeconds` — because the interesting Publish defects are about
@@ -25,9 +25,10 @@ import {
   type TestDb,
 } from "@/test-utils/pglite";
 import {
-  createFakeDropbox,
-  FAKE_ACCESS_TOKEN,
-} from "@/test-utils/fake-dropbox";
+  createFakeGoogleDrive,
+  FAKE_COURSES_FOLDER_ID,
+  FAKE_DRIVE_ACCESS_TOKEN,
+} from "@/test-utils/fake-google-drive";
 import { CourseOperationsService } from "@/services/db-course-operations.server";
 import { VideoOperationsService } from "@/services/db-video-operations.server";
 import { VersionOperationsService } from "@/services/db-version-operations.server";
@@ -44,15 +45,16 @@ import {
   clips as clipsTable,
   chapters as chaptersTable,
   videos as videosTable,
-  dropboxAuth,
+  googleDriveAuth,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export let testDb: TestDb;
 export let finishedVideosDir: string;
-export let fakeDropbox: ReturnType<typeof createFakeDropbox>;
+export let fakeDrive: ReturnType<typeof createFakeGoogleDrive>;
 
-export const DROPBOX_REMOTE_PATH = "/Courses";
+/** The Course folder the fake Drive's paths start with. */
+export const COURSE_DIR = "test-course";
 
 /** What the fake renderer writes when a test does not say otherwise. */
 export const DEFAULT_RENDERED_BYTES = "dummy-video-content";
@@ -69,7 +71,7 @@ export type FakeRenderRun = {
   requestedDurationInSeconds: number;
 };
 
-/** Register the shared database and fake-Dropbox lifecycle hooks. */
+/** Register the shared database and fake-Drive lifecycle hooks. */
 export function setupPublishServiceTests() {
   beforeAll(async () => {
     const result = await createTestDb();
@@ -77,7 +79,7 @@ export function setupPublishServiceTests() {
   });
 
   afterEach(() => {
-    fakeDropbox?.cleanup();
+    fakeDrive?.cleanup();
   });
 }
 
@@ -145,16 +147,16 @@ export const setupPublishableCourse = async (opts?: {
   const videoCount = opts?.videoCount ?? 1;
   await truncateAllTables(testDb);
 
-  fakeDropbox = createFakeDropbox();
-  fakeDropbox.install();
+  fakeDrive = createFakeGoogleDrive();
+  fakeDrive.install();
 
   finishedVideosDir = fs.mkdtempSync(
     path.join(tmpdir(), "publish-test-videos-")
   );
 
-  // Seed Dropbox auth.
-  await testDb.insert(dropboxAuth).values({
-    accessToken: FAKE_ACCESS_TOKEN,
+  // Seed Google Drive auth.
+  await testDb.insert(googleDriveAuth).values({
+    accessToken: FAKE_DRIVE_ACCESS_TOKEN,
     refreshToken: "fake-refresh-token",
     expiresAt: new Date(Date.now() + 3600 * 1000),
   });
@@ -343,7 +345,7 @@ export const setupPublishableCourse = async (opts?: {
     ConfigProvider.fromMap(
       new Map([
         ["FINISHED_VIDEOS_DIRECTORY", finishedVideosDir],
-        ["DROPBOX_REMOTE_PATH", DROPBOX_REMOTE_PATH],
+        ["GOOGLE_DRIVE_COURSES_FOLDER_ID", FAKE_COURSES_FOLDER_ID],
         ...Object.entries(opts?.config ?? {}),
       ])
     )
