@@ -30,6 +30,7 @@ A Turborepo monorepo on a pnpm workspace. Use Node 22 (`.node-version`) and pnpm
 - Typecheck with `pnpm run typecheck` (or `pnpm --filter <pkg> typecheck`). **Never run bare `npx tsc`.** A PreToolUse hook blocks it in both Claude Code and Codex (`scripts/agent-hooks/block-npx-tsc.mjs`).
 - Check boundaries with `pnpm run lint:boundaries`.
 - The pre-commit hook runs lint-staged (prettier), typecheck, lint:boundaries, a file-size check and a no-`__dirname` check. Never skip it with `--no-verify`. Fix whatever it reports instead.
+- **Codex prerequisite:** before using Codex in this repo, run `/hooks` inside an interactive `codex` session to trust the `.codex/` folder. The `block-npx-tsc.mjs` PreToolUse hook will not load until that folder is trusted.
 
 ## Testing
 
