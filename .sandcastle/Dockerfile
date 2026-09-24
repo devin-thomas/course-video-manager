@@ -23,11 +23,26 @@ RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 RUN usermod -d /home/agent -m -l agent node
 USER agent
 
+# Give npm global installs (Codex CLI, below) a location the non-root "agent"
+# user can write to — the base image's default prefix (/usr/local) is
+# root-owned.
+ENV NPM_CONFIG_PREFIX="/home/agent/.npm-global"
+ENV PATH="/home/agent/.local/bin:/home/agent/.npm-global/bin:$PATH"
+
 # Install Claude Code CLI
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
-# Add Claude to PATH
-ENV PATH="/home/agent/.local/bin:$PATH"
+# Install Codex CLI
+RUN npm install -g @openai/codex
+
+# Install Antigravity CLI
+RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
+
+# Cursor: only the @cursor/sdk npm package is set up here (as a project
+# dependency, installed by the existing "pnpm install" onSandboxReady hook —
+# see main.ts). @ai-hero/sandcastle's cursor() provider shells out to a CLI
+# binary named `agent`, which @cursor/sdk does not provide; that binary needs
+# its own installer and isn't part of this Dockerfile.
 
 WORKDIR /home/agent
 

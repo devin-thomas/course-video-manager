@@ -12,7 +12,7 @@ on:
 jobs:
   update-branch:
     if: github.event.label.name == 'agent:update-branch'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 60
     concurrency:
       group: agent-mutate-pr-${{ github.event.pull_request.number }}
@@ -36,6 +36,23 @@ jobs:
           gh pr edit "$PR_NUMBER" --remove-label "agent:blocked" || true
           gh pr edit "$PR_NUMBER" --add-label "agent:in-progress"
 
+      - name: Resolve provider
+        id: sandcastle
+        env:
+          SANDCASTLE_PROVIDER: ${{ vars.SANDCASTLE_PROVIDER }}
+        run: |
+          set -euo pipefail
+          provider="${SANDCASTLE_PROVIDER:-$(gh api "repos/${GH_REPO}/contents/.sandcastle/config.json" --jq '.content' | base64 -d | jq -r '.defaultProvider')}"
+          case "$provider" in
+            claude-code) bot_name="claude-code[bot]" ;;
+            codex) bot_name="codex[bot]" ;;
+            antigravity) bot_name="agy[bot]" ;;
+            cursor) bot_name="cursor[bot]" ;;
+            *) echo "Unknown Sandcastle provider: $provider" >&2; exit 1 ;;
+          esac
+          echo "provider=$provider" >> "$GITHUB_OUTPUT"
+          echo "bot_name=$bot_name" >> "$GITHUB_OUTPUT"
+
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
@@ -57,18 +74,31 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code
+      - name: Install agent CLI
+        env:
+          PROVIDER: ${{ steps.sandcastle.outputs.provider }}
+        run: |
+          case "$PROVIDER" in
+            claude-code) npm install -g @anthropic-ai/claude-code ;;
+            codex) npm install -g @openai/codex ;;
+            antigravity) curl -fsSL https://antigravity.google/cli/install.sh | bash ;;
+            cursor) npm install @cursor/sdk ;;
+            *) echo "Unknown Sandcastle provider: $PROVIDER" >&2; exit 1 ;;
+          esac
 
       - name: Configure git identity
+        env:
+          BOT_NAME: ${{ steps.sandcastle.outputs.bot_name }}
         run: |
-          git config user.name "claude-code[bot]"
-          git config user.email "claude-code[bot]@users.noreply.github.com"
+          git config user.name "$BOT_NAME"
+          git config user.email "${BOT_NAME}@users.noreply.github.com"
 
       - name: Run update-branch.ts
         id: run
         env:
+          SANDCASTLE_PROVIDER: ${{ steps.sandcastle.outputs.provider }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           OUTPUT_DIR: ${{ runner.temp }}
         run: pnpm exec tsx .sandcastle/update-branch/update-branch.ts
 

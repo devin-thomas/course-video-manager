@@ -7,10 +7,14 @@ import { parseDiffLines } from "../review/parse-diff-lines";
 import { ImplementPrOutput } from "./implement-pr-output";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { runWithExtraction } from "../run-with-extraction";
+import { resolveConfig } from "../resolve-config";
+import { resolveProvider } from "../resolve-provider";
 
 const PR_NUMBER = required("PR_NUMBER");
 const BRANCH = required("BRANCH");
 const OUTPUT_DIR = process.env.OUTPUT_DIR ?? "/tmp";
+const config = resolveConfig();
+const provider = resolveProvider(config);
 
 const PrView = z.object({
   title: z.string(),
@@ -36,6 +40,10 @@ const ISSUE_NUMBER = issueMatch?.[1] ?? "";
 const ISSUE_TITLE = ISSUE_NUMBER
   ? safeSh(`gh issue view ${ISSUE_NUMBER} --json title --jq .title`).trim()
   : "";
+const ISSUE_BODY = ISSUE_NUMBER
+  ? safeSh(`gh issue view ${ISSUE_NUMBER} --comments`).trim()
+  : "";
+const DIFF = sh(`git diff ${config.baseBranch}..HEAD --stat`).trim();
 
 const reviewsJson = sh(
   `gh api repos/{owner}/{repo}/pulls/${PR_NUMBER}/reviews`
@@ -159,11 +167,7 @@ const prComments = {
 
 const result = await runWithExtraction({
   name: `implement-pr-${PR_NUMBER}`,
-  agent: sandcastle.claudeCode("claude-opus-5", {
-    env: {
-      CLAUDE_CODE_OAUTH_TOKEN: required("CLAUDE_CODE_OAUTH_TOKEN"),
-    },
-  }),
+  agent: provider,
   sandbox: noSandbox(),
   logging: { type: "stdout" },
   promptFile: path.join(import.meta.dirname, "prompt.md"),
@@ -172,6 +176,8 @@ const result = await runWithExtraction({
     BRANCH,
     ISSUE_NUMBER: ISSUE_NUMBER || "(none)",
     ISSUE_TITLE: ISSUE_TITLE || "(no linked issue)",
+    ISSUE_BODY: ISSUE_BODY || "(no linked issue)",
+    DIFF,
     PR_COMMENTS_JSON: JSON.stringify(prComments, null, 2),
   },
   output: sandcastle.Output.object({
@@ -197,7 +203,9 @@ if (commitsThisRun === 0 && replyCount === 0) {
 }
 
 const headSha = sh("git rev-parse HEAD").trim();
-const diffLines = parseDiffLines(safeSh("git diff main...HEAD"));
+const diffLines = parseDiffLines(
+  safeSh(`git diff ${config.baseBranch}...HEAD`)
+);
 const validInlineComments = result.output.newInlineComments.filter((c) => {
   const fileLines = diffLines.get(c.path);
   if (!fileLines) {

@@ -4,10 +4,13 @@ import { z } from "zod";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { runWithRetry } from "../run-with-retry";
+import { resolveConfig } from "../resolve-config";
+import { resolveProvider } from "../resolve-provider";
 
 const PRD_NUMBER = required("PRD_NUMBER");
 const PRD_TITLE = required("PRD_TITLE");
 const GH_REPO = required("GH_REPO");
+const provider = resolveProvider(resolveConfig());
 
 const Slice = z.object({
   title: z.string().min(1).max(200),
@@ -21,11 +24,7 @@ const PromptOutput = z.object({
 
 const result = await runWithRetry({
   name: `to-issues-prd-#${PRD_NUMBER}`,
-  agent: sandcastle.claudeCode("claude-opus-5", {
-    env: {
-      CLAUDE_CODE_OAUTH_TOKEN: required("CLAUDE_CODE_OAUTH_TOKEN"),
-    },
-  }),
+  agent: provider,
   sandbox: noSandbox(),
   logging: { type: "stdout" },
   promptFile: path.join(import.meta.dirname, "prompt.md"),

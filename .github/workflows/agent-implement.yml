@@ -7,7 +7,7 @@ on:
 jobs:
   implement:
     if: github.event.label.name == 'agent:implement'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 60
     concurrency:
       group: agent-implement-issue-${{ github.event.issue.number }}
@@ -95,11 +95,32 @@ jobs:
           gh issue edit "$ISSUE_NUMBER" --remove-label "agent:blocked" || true
           gh issue edit "$ISSUE_NUMBER" --add-label "agent:in-progress"
 
-      - name: Checkout main
+      - name: Resolve provider and base branch
+        if: steps.shape.outputs.proceed == 'true' && steps.preflight.outputs.refused != 'true'
+        id: sandcastle
+        env:
+          SANDCASTLE_PROVIDER: ${{ vars.SANDCASTLE_PROVIDER }}
+        run: |
+          set -euo pipefail
+          config=$(gh api "repos/${GH_REPO}/contents/.sandcastle/config.json" --jq '.content' | base64 -d)
+          provider="${SANDCASTLE_PROVIDER:-$(echo "$config" | jq -r '.defaultProvider')}"
+          base_ref=$(echo "$config" | jq -r '.defaultBaseBranch')
+          case "$provider" in
+            claude-code) bot_name="claude-code[bot]" ;;
+            codex) bot_name="codex[bot]" ;;
+            antigravity) bot_name="agy[bot]" ;;
+            cursor) bot_name="cursor[bot]" ;;
+            *) echo "Unknown Sandcastle provider: $provider" >&2; exit 1 ;;
+          esac
+          echo "provider=$provider" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+          echo "bot_name=$bot_name" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout base branch
         if: steps.shape.outputs.proceed == 'true' && steps.preflight.outputs.refused != 'true'
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ steps.sandcastle.outputs.base_ref }}
           fetch-depth: 0
           # Use AGENT_PAT so pushes can include changes to files under
           # .github/workflows/ (GITHUB_TOKEN lacks the `workflows` scope).
@@ -122,9 +143,10 @@ jobs:
         if: steps.shape.outputs.proceed == 'true' && steps.preflight.outputs.refused != 'true'
         env:
           BRANCH: ${{ steps.branch.outputs.name }}
+          BOT_NAME: ${{ steps.sandcastle.outputs.bot_name }}
         run: |
-          git config user.name "claude-code[bot]"
-          git config user.email "claude-code[bot]@users.noreply.github.com"
+          git config user.name "$BOT_NAME"
+          git config user.email "${BOT_NAME}@users.noreply.github.com"
           git checkout -b "$BRANCH"
 
       - name: Setup pnpm
@@ -142,15 +164,26 @@ jobs:
         if: steps.shape.outputs.proceed == 'true' && steps.preflight.outputs.refused != 'true'
         run: pnpm install --frozen-lockfile
 
-      - name: Install Claude Code
+      - name: Install agent CLI
         if: steps.shape.outputs.proceed == 'true' && steps.preflight.outputs.refused != 'true'
-        run: npm install -g @anthropic-ai/claude-code
+        env:
+          PROVIDER: ${{ steps.sandcastle.outputs.provider }}
+        run: |
+          case "$PROVIDER" in
+            claude-code) npm install -g @anthropic-ai/claude-code ;;
+            codex) npm install -g @openai/codex ;;
+            antigravity) curl -fsSL https://antigravity.google/cli/install.sh | bash ;;
+            cursor) npm install @cursor/sdk ;;
+            *) echo "Unknown Sandcastle provider: $PROVIDER" >&2; exit 1 ;;
+          esac
 
       - name: Run implement.ts
         if: steps.shape.outputs.proceed == 'true' && steps.preflight.outputs.refused != 'true'
         id: implement
         env:
+          SANDCASTLE_PROVIDER: ${{ steps.sandcastle.outputs.provider }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           BRANCH: ${{ steps.branch.outputs.name }}
           OUTPUT_DIR: ${{ runner.temp }}
         run: pnpm exec tsx .sandcastle/implement/implement.ts
@@ -168,7 +201,9 @@ jobs:
       - name: Write PR title and description
         if: steps.shape.outputs.proceed == 'true' && steps.preflight.outputs.refused != 'true' && success()
         env:
+          SANDCASTLE_PROVIDER: ${{ steps.sandcastle.outputs.provider }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           BRANCH: ${{ steps.branch.outputs.name }}
           OUTPUT_DIR: ${{ runner.temp }}
         run: pnpm exec tsx .sandcastle/write-pr/write-pr.ts
@@ -178,12 +213,13 @@ jobs:
         id: open_pr
         env:
           BRANCH: ${{ steps.branch.outputs.name }}
+          BASE_REF: ${{ steps.sandcastle.outputs.base_ref }}
         run: |
           PR_TITLE=$(cat "${RUNNER_TEMP}/pr_title.txt")
           PR_TITLE="${PR_TITLE:0:256}"
           pr_url=$(gh pr create \
             --draft \
-            --base main \
+            --base "$BASE_REF" \
             --head "$BRANCH" \
             --title "$PR_TITLE" \
             --body-file "${RUNNER_TEMP}/pr_description.txt" | tail -n1)

@@ -42,8 +42,7 @@ Before committing, run `pnpm run typecheck` and `pnpm run test`.
 # COMMIT
 
 Make one or more git commits on `{{BRANCH}}`. Use conventional-commit
-messages (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`). Do NOT use a
-`RALPH:` prefix.
+messages (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`).
 
 Include `Part of #{{PRD_NUMBER}}` in each commit body so the history is
 linkable from the PRD. Do **not** include `Closes` in commits — closing the

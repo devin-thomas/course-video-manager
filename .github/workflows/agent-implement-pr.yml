@@ -9,7 +9,7 @@ on:
 jobs:
   implement-pr:
     if: github.event.label.name == 'agent:implement'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 60
     # Shared with agent-review.yml — both push to the PR branch.
     concurrency:
@@ -69,6 +69,27 @@ jobs:
           gh pr edit "$PR_NUMBER" --remove-label "agent:blocked" || true
           gh pr edit "$PR_NUMBER" --add-label "agent:in-progress"
 
+      - name: Resolve provider and base branch
+        if: steps.state.outputs.proceed == 'true' && steps.inputs.outputs.proceed == 'true'
+        id: sandcastle
+        env:
+          SANDCASTLE_PROVIDER: ${{ vars.SANDCASTLE_PROVIDER }}
+        run: |
+          set -euo pipefail
+          config=$(gh api "repos/${GH_REPO}/contents/.sandcastle/config.json" --jq '.content' | base64 -d)
+          provider="${SANDCASTLE_PROVIDER:-$(echo "$config" | jq -r '.defaultProvider')}"
+          base_ref=$(echo "$config" | jq -r '.defaultBaseBranch')
+          case "$provider" in
+            claude-code) bot_name="claude-code[bot]" ;;
+            codex) bot_name="codex[bot]" ;;
+            antigravity) bot_name="agy[bot]" ;;
+            cursor) bot_name="cursor[bot]" ;;
+            *) echo "Unknown Sandcastle provider: $provider" >&2; exit 1 ;;
+          esac
+          echo "provider=$provider" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+          echo "bot_name=$bot_name" >> "$GITHUB_OUTPUT"
+
       - name: Checkout PR branch
         if: steps.state.outputs.proceed == 'true' && steps.inputs.outputs.proceed == 'true'
         uses: actions/checkout@v4
@@ -77,10 +98,12 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.AGENT_PAT || secrets.GITHUB_TOKEN }}
 
-      - name: Ensure main is available for diffing
+      - name: Ensure base branch is available for diffing
         if: steps.state.outputs.proceed == 'true' && steps.inputs.outputs.proceed == 'true'
+        env:
+          BASE_REF: ${{ steps.sandcastle.outputs.base_ref }}
         run: |
-          git fetch origin main:main || git fetch origin main
+          git fetch origin "${BASE_REF}:${BASE_REF}" || git fetch origin "$BASE_REF"
           git checkout "$BRANCH" 2>/dev/null || git checkout -B "$BRANCH"
 
       - name: Setup pnpm
@@ -98,21 +121,34 @@ jobs:
         if: steps.state.outputs.proceed == 'true' && steps.inputs.outputs.proceed == 'true'
         run: pnpm install --frozen-lockfile
 
-      - name: Install Claude Code
+      - name: Install agent CLI
         if: steps.state.outputs.proceed == 'true' && steps.inputs.outputs.proceed == 'true'
-        run: npm install -g @anthropic-ai/claude-code
+        env:
+          PROVIDER: ${{ steps.sandcastle.outputs.provider }}
+        run: |
+          case "$PROVIDER" in
+            claude-code) npm install -g @anthropic-ai/claude-code ;;
+            codex) npm install -g @openai/codex ;;
+            antigravity) curl -fsSL https://antigravity.google/cli/install.sh | bash ;;
+            cursor) npm install @cursor/sdk ;;
+            *) echo "Unknown Sandcastle provider: $PROVIDER" >&2; exit 1 ;;
+          esac
 
       - name: Configure git identity
         if: steps.state.outputs.proceed == 'true' && steps.inputs.outputs.proceed == 'true'
+        env:
+          BOT_NAME: ${{ steps.sandcastle.outputs.bot_name }}
         run: |
-          git config user.name "claude-code[bot]"
-          git config user.email "claude-code[bot]@users.noreply.github.com"
+          git config user.name "$BOT_NAME"
+          git config user.email "${BOT_NAME}@users.noreply.github.com"
 
       - name: Run implement-pr.ts
         if: steps.state.outputs.proceed == 'true' && steps.inputs.outputs.proceed == 'true'
         id: implement
         env:
+          SANDCASTLE_PROVIDER: ${{ steps.sandcastle.outputs.provider }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           OUTPUT_DIR: ${{ runner.temp }}
         run: pnpm exec tsx .sandcastle/implement-pr/implement-pr.ts
 
